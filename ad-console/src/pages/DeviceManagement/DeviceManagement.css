@@ -1,0 +1,33 @@
+.device-management {
+    padding: 20px;
+  }
+  
+  .device-card {
+    transition: all 0.3s ease;
+  }
+  
+  .device-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+  
+  .pairing-code-display {
+    font-size: 1.5rem;
+    font-weight: bold;
+    letter-spacing: 0.2rem;
+    color: #0d6efd;
+    font-family: 'Courier New', monospace;
+  }
+  
+  .url-input {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+  }
+  
+  .qr-code-container {
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    display: inline-block;
+  }
+  

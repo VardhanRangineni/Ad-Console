@@ -1,0 +1,64 @@
+.monitor {
+    padding: 20px;
+  }
+  
+  .screen-card {
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+  }
+  
+  .screen-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+  
+  .screen-card.offline {
+    opacity: 0.7;
+    border-color: #dc3545;
+  }
+  
+  .screen-preview {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+  }
+  
+  .screen-preview.horizontal {
+    aspect-ratio: 16/9;
+  }
+  
+  .screen-preview.vertical {
+    aspect-ratio: 9/16;
+    max-width: 200px;
+    margin: 0 auto;
+  }
+  
+  .no-content {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+  }
+  
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: currentColor;
+    margin-right: 5px;
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  

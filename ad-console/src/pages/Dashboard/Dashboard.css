@@ -1,0 +1,35 @@
+.dashboard {
+    padding: 20px;
+  }
+  
+  .stat-card {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-4px);
+  }
+  
+  .stat-icon {
+    font-size: 3rem;
+    opacity: 0.3;
+  }
+  
+  .action-link {
+    text-decoration: none;
+    color: inherit;
+  }
+  
+  .action-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+  
+  .action-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    background-color: #f8f9fa;
+  }
+  
