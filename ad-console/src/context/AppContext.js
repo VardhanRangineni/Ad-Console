@@ -5,80 +5,109 @@ import { mockWebSocket } from '../services/mockWebSocket';
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+  // State management
   const [devices, setDevices] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedContent, setSelectedContent] = useState(null);
+  const [bulkAssignContent, setBulkAssignContent] = useState([]);
 
+  // Load devices from backend
   const loadDevices = useCallback(() => {
-    setDevices(mockBackend.getAllDevices());
+    const deviceList = mockBackend.getAllDevices();
+    setDevices(deviceList);
   }, []);
 
+  // Load assignments from backend
   const loadAssignments = useCallback(() => {
-    setAssignments(mockBackend.getAllAssignments());
+    const assignmentList = mockBackend.getAllAssignments();
+    setAssignments(assignmentList);
   }, []);
 
+  // Handle content update events
   const handleContentUpdate = useCallback((data) => {
     console.log('Content updated:', data);
     loadAssignments();
   }, [loadAssignments]);
 
+  // Handle device update events
   const handleDeviceUpdate = useCallback((data) => {
     console.log('Devices updated:', data);
     loadDevices();
   }, [loadDevices]);
 
+  // Initialize on mount
   useEffect(() => {
+    // Load initial data
     loadDevices();
     loadAssignments();
 
+    // Subscribe to WebSocket events for real-time updates
     mockWebSocket.subscribe('contentUpdate', handleContentUpdate);
     mockWebSocket.subscribe('deviceUpdate', handleDeviceUpdate);
 
+    // Cleanup function
     return () => {
-      // Cleanup if needed
+      // Cleanup subscriptions if needed
     };
   }, [handleContentUpdate, handleDeviceUpdate, loadDevices, loadAssignments]);
 
+  // Register a new device
   const registerDevice = useCallback((deviceData) => {
     const device = mockBackend.registerDevice(deviceData);
     loadDevices();
     return device;
   }, [loadDevices]);
 
+  // Add a new content assignment
   const addAssignment = useCallback((assignment) => {
     mockBackend.addAssignment(assignment);
     loadAssignments();
   }, [loadAssignments]);
 
+  // Delete an assignment
   const deleteAssignment = useCallback((id) => {
     mockBackend.deleteAssignment(id);
     loadAssignments();
   }, [loadAssignments]);
 
+  // Delete a device
   const deleteDevice = useCallback((id) => {
     mockBackend.deleteDevice(id);
     loadDevices();
   }, [loadDevices]);
 
+  // Context value object
+  const contextValue = {
+    // State
+    devices,
+    assignments,
+    selectedLocation,
+    selectedContent,
+    bulkAssignContent,
+    
+    // State setters
+    setSelectedLocation,
+    setSelectedContent,
+    setBulkAssignContent,
+    
+    // Actions
+    registerDevice,
+    addAssignment,
+    deleteAssignment,
+    deleteDevice,
+    loadDevices,
+    loadAssignments
+  };
+
   return (
-    <AppContext.Provider value={{
-      devices,
-      assignments,
-      registerDevice,
-      addAssignment,
-      deleteAssignment,
-      deleteDevice,
-      selectedLocation,
-      setSelectedLocation,
-      selectedContent,
-      setSelectedContent
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
 };
 
+// Custom hook to use the App context
 export const useApp = () => {
   const context = useContext(AppContext);
   if (!context) {
@@ -86,3 +115,6 @@ export const useApp = () => {
   }
   return context;
 };
+
+// Export the context itself (optional, for advanced use cases)
+export default AppContext;

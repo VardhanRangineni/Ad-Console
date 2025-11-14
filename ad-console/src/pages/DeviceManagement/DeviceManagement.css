@@ -31,3 +31,14 @@
     display: inline-block;
   }
   
+  /* Custom light tooltip for device actions */
+.custom-tooltip.bs-tooltip-top .tooltip-inner,
+.custom-tooltip.bs-tooltip-bottom .tooltip-inner,
+.custom-tooltip.bs-tooltip-left .tooltip-inner,
+.custom-tooltip.bs-tooltip-right .tooltip-inner {
+  background-color: #f8f9fa !important;
+  color: #212529 !important;
+  border: 1px solid #dee2e6 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  font-size: 0.95rem;
+}

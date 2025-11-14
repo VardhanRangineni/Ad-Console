@@ -1,8 +1,9 @@
+// src/components/ContentCard/ContentCard.jsx
 import React from 'react';
 import { Card, Badge, Button } from 'react-bootstrap';
 import './ContentCard.css';
 
-function ContentCard({ content, onSelect, isSelected }) {
+function ContentCard({ content, onSelect, isSelected, onDelete, showDelete = true }) {
   const getTypeColor = (type) => {
     switch (type) {
       case 'video': return 'primary';
@@ -40,29 +41,43 @@ function ContentCard({ content, onSelect, isSelected }) {
         <Card.Text className="text-muted small">
           <i className="bi bi-clock me-1"></i>
           Duration: {content.duration}s
+          {content.slideCount && ` × ${content.slideCount} slides`}
         </Card.Text>
         <Card.Text className="text-muted small">
           <i className="bi bi-calendar me-1"></i>
           Created: {content.createdAt}
         </Card.Text>
-        <Button 
-          variant={isSelected ? "success" : "outline-primary"}
-          size="sm"
-          className="mt-auto"
-          onClick={() => onSelect(content)}
-        >
-          {isSelected ? (
-            <>
-              <i className="bi bi-check-circle me-1"></i>
-              Selected
-            </>
-          ) : (
-            <>
-              <i className="bi bi-plus-circle me-1"></i>
-              Select
-            </>
+        <div className="mt-auto d-grid gap-2">
+          <Button 
+            variant={isSelected ? "success" : "outline-primary"}
+            size="sm"
+            onClick={() => onSelect(content)}
+          >
+            {isSelected ? (
+              <>
+                <i className="bi bi-check-circle me-1"></i>
+                Selected
+              </>
+            ) : (
+              <>
+                <i className="bi bi-plus-circle me-1"></i>
+                Select
+              </>
+            )}
+          </Button>
+          {showDelete && onDelete && (
+            <Button 
+              variant="outline-danger"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(content);
+              }}
+            >
+              <i className="bi bi-trash"></i>
+            </Button>
           )}
-        </Button>
+        </div>
       </Card.Body>
     </Card>
   );

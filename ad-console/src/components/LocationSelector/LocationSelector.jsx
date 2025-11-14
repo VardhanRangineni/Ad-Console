@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Form } from 'react-bootstrap';
 import { mockLocations } from '../../data/mockLocations';
 import './LocationSelector.css';
 
 function LocationSelector({ onSelect, selectedLocation }) {
-  const [expanded, setExpanded] = useState({});
+  const [expanded, setExpanded] = React.useState({});
 
   const toggleExpand = (id) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));

@@ -1,30 +1,36 @@
 // src/pages/Dashboard/Dashboard.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Badge, Modal, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { mockContent } from '../../data/mockContent';
-import { mockLocations } from '../../data/mockLocations';
 import './Dashboard.css';
 
 function Dashboard() {
-  const { assignments, deleteAssignment } = useApp();
+  const { assignments, deleteAssignment, devices } = useApp();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const [allContent, setAllContent] = useState([]);
 
-  const countStores = (location) => {
-    if (location.type === 'store') return 1;
-    if (!location.children) return 0;
-    return location.children.reduce((sum, child) => sum + countStores(child), 0);
-  };
+  // Load real content count dynamically
+  useEffect(() => {
+    const loadContent = () => {
+      const customContentStr = localStorage.getItem('customContent');
+      const customContent = customContentStr ? JSON.parse(customContentStr) : [];
+      setAllContent(customContent);
+    };
 
-  const totalStores = countStores(mockLocations);
-  const activeScreens = totalStores - 1;
+    loadContent();
 
-  // Load custom content
-  const customContentStr = localStorage.getItem('customContent');
-  const customContent = customContentStr ? JSON.parse(customContentStr) : [];
-  const allContent = [...mockContent, ...customContent];
+    // Listen for content changes
+    const handleStorageChange = (e) => {
+      if (e.key === 'customContent') {
+        loadContent();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const confirmDelete = (id) => {
     setDeleteId(id);
@@ -36,6 +42,9 @@ function Dashboard() {
     setShowDeleteModal(false);
     setDeleteId(null);
   };
+
+  const onlineDevices = devices.filter(d => d.status === 'online').length;
+  const totalDevices = devices.length;
 
   return (
     <div className="dashboard">
@@ -52,7 +61,7 @@ function Dashboard() {
               <div className="d-flex justify-content-between align-items-center">
                 <div>
                   <h6 className="text-white-50 mb-2">Total Screens</h6>
-                  <h2 className="mb-0">{totalStores}</h2>
+                  <h2 className="mb-0">{totalDevices}</h2>
                 </div>
                 <i className="bi bi-tv stat-icon"></i>
               </div>
@@ -66,7 +75,7 @@ function Dashboard() {
               <div className="d-flex justify-content-between align-items-center">
                 <div>
                   <h6 className="text-white-50 mb-2">Active Screens</h6>
-                  <h2 className="mb-0">{activeScreens}</h2>
+                  <h2 className="mb-0">{onlineDevices}</h2>
                 </div>
                 <i className="bi bi-check-circle stat-icon"></i>
               </div>

@@ -1,32 +1,60 @@
+// src/pages/AssignContent/AssignContent.jsx
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Form, Button, Alert } from 'react-bootstrap';
+import { Row, Col, Card, Form, Button, Alert, Badge } from 'react-bootstrap';
+import { useSearchParams } from 'react-router-dom';
 import LocationSelector from '../../components/LocationSelector/LocationSelector';
 import ScreenSimulator from '../../components/ScreenSimulator/ScreenSimulator';
 import { useApp } from '../../context/AppContext';
-import { mockContent } from '../../data/mockContent';
 import './AssignContent.css';
 
 function AssignContent() {
-  const { selectedContent, selectedLocation, setSelectedLocation, addAssignment } = useApp();
+  const [searchParams] = useSearchParams();
+  const isBulkMode = searchParams.get('bulk') === 'true';
+  
+  const { 
+    selectedContent, 
+    selectedLocation, 
+    setSelectedLocation, 
+    addAssignment,
+    bulkAssignContent,
+    setBulkAssignContent 
+  } = useApp();
+  
   const [contentId, setContentId] = useState(selectedContent?.id || '');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [orientation, setOrientation] = useState('horizontal');
   const [showSuccess, setShowSuccess] = useState(false);
   const [allContent, setAllContent] = useState([]);
+  const [bulkItems, setBulkItems] = useState([]);
 
-  // Load all content (mock + custom uploaded)
   useEffect(() => {
     const loadAllContent = () => {
       const customContentStr = localStorage.getItem('customContent');
       const customContent = customContentStr ? JSON.parse(customContentStr) : [];
-      const combined = [...mockContent, ...customContent];
-      setAllContent(combined);
+      setAllContent(customContent);
     };
 
     loadAllContent();
 
-    // Listen for storage changes
+    // Handle bulk mode
+    if (isBulkMode) {
+      // Try to get from Context first
+      if (bulkAssignContent && bulkAssignContent.length > 0) {
+        setBulkItems(bulkAssignContent);
+      } else {
+        // Fallback: load from localStorage IDs
+        const idsStr = localStorage.getItem('bulkAssignContentIds');
+        if (idsStr) {
+          const ids = JSON.parse(idsStr);
+          const customContentStr = localStorage.getItem('customContent');
+          const customContent = customContentStr ? JSON.parse(customContentStr) : [];
+          const items = ids.map(id => customContent.find(c => c.id === id)).filter(Boolean);
+          setBulkItems(items);
+        }
+      }
+    }
+
     const handleStorageChange = (e) => {
       if (e.key === 'customContent') {
         loadAllContent();
@@ -35,9 +63,8 @@ function AssignContent() {
 
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [isBulkMode, bulkAssignContent]);
 
-  // Update contentId when selectedContent changes
   useEffect(() => {
     if (selectedContent) {
       setContentId(selectedContent.id);
@@ -47,43 +74,86 @@ function AssignContent() {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!contentId || !selectedLocation || !startDate || !endDate) {
-      alert('Please fill all fields');
+    if (!selectedLocation || !startDate || !endDate) {
+      alert('Please fill all required fields');
       return;
     }
 
-    addAssignment({
-      contentId: parseInt(contentId),
-      locationId: selectedLocation.id,
-      locationName: selectedLocation.name,
-      startDate,
-      endDate,
-      orientation
-    });
+    if (isBulkMode && bulkItems.length > 0) {
+      // Bulk assign all selected items
+      bulkItems.forEach(item => {
+        addAssignment({
+          contentId: item.id,
+          locationId: selectedLocation.id,
+          locationName: selectedLocation.name,
+          startDate,
+          endDate,
+          orientation
+        });
+      });
 
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 3000);
+      // Clear bulk data
+      localStorage.removeItem('bulkAssignContentIds');
+      setBulkAssignContent([]);
+      
+      setShowSuccess(true);
+      setTimeout(() => {
+        window.location.href = '/content';
+      }, 2000);
+    } else if (contentId) {
+      // Single assignment
+      addAssignment({
+        contentId: parseInt(contentId),
+        locationId: selectedLocation.id,
+        locationName: selectedLocation.name,
+        startDate,
+        endDate,
+        orientation
+      });
 
-    // Reset form
-    setContentId('');
-    setStartDate('');
-    setEndDate('');
-    setSelectedLocation(null);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+
+      setContentId('');
+      setStartDate('');
+      setEndDate('');
+      setSelectedLocation(null);
+    } else {
+      alert('Please select content');
+    }
   };
 
-  const previewContent = allContent.find(c => c.id === parseInt(contentId));
+  const previewContent = isBulkMode && bulkItems.length > 0 
+    ? bulkItems[0] 
+    : allContent.find(c => c.id === parseInt(contentId));
 
   return (
     <div className="assign-content">
       <h2 className="mb-4">
         <i className="bi bi-plus-circle me-2"></i>
-        Assign Content to Screens
+        {isBulkMode ? 'Bulk Assign Content to Screens' : 'Assign Content to Screens'}
       </h2>
 
       {showSuccess && (
         <Alert variant="success" dismissible onClose={() => setShowSuccess(false)}>
           <i className="bi bi-check-circle me-2"></i>
-          Content assigned successfully!
+          {isBulkMode 
+            ? `Successfully assigned ${bulkItems.length} content items!` 
+            : 'Content assigned successfully!'}
+        </Alert>
+      )}
+
+      {isBulkMode && bulkItems.length > 0 && (
+        <Alert variant="info">
+          <i className="bi bi-info-circle me-2"></i>
+          <strong>Bulk Assignment Mode:</strong> Assigning {bulkItems.length} content item(s)
+          <div className="mt-2">
+            {bulkItems.map((item, idx) => (
+              <Badge key={item.id} bg="primary" className="me-2">
+                {idx + 1}. {item.title}
+              </Badge>
+            ))}
+          </div>
         </Alert>
       )}
 
@@ -95,25 +165,27 @@ function AssignContent() {
             </Card.Header>
             <Card.Body>
               <Form onSubmit={handleSubmit}>
-                {/* Content Selection */}
-                <Form.Group className="mb-4">
-                  <Form.Label className="fw-bold">Select Content</Form.Label>
-                  <Form.Select 
-                    value={contentId}
-                    onChange={(e) => setContentId(e.target.value)}
-                    required
-                  >
-                    <option value="">Choose content...</option>
-                    {allContent.map(content => (
-                      <option key={content.id} value={content.id}>
-                        {content.title} ({content.type}) {content.custom ? '- Custom Upload' : ''}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  <Form.Text className="text-muted">
-                    {allContent.length} total content items available ({allContent.filter(c => c.custom).length} custom uploads)
-                  </Form.Text>
-                </Form.Group>
+                {/* Only show content selector if NOT in bulk mode */}
+                {!isBulkMode && (
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-bold">Select Content</Form.Label>
+                    <Form.Select 
+                      value={contentId}
+                      onChange={(e) => setContentId(e.target.value)}
+                      required
+                    >
+                      <option value="">Choose content...</option>
+                      {allContent.map(content => (
+                        <option key={content.id} value={content.id}>
+                          {content.title} ({content.type}) {content.custom ? '- Custom Upload' : ''}
+                        </option>
+                      ))}
+                    </Form.Select>
+                    <Form.Text className="text-muted">
+                      {allContent.length} total content items available
+                    </Form.Text>
+                  </Form.Group>
+                )}
 
                 {/* Location Selection */}
                 <LocationSelector 
@@ -199,7 +271,7 @@ function AssignContent() {
                     type="submit"
                   >
                     <i className="bi bi-check-circle me-2"></i>
-                    Create Assignment
+                    {isBulkMode ? `Assign ${bulkItems.length} Items` : 'Create Assignment'}
                   </Button>
                 </div>
               </Form>
@@ -216,7 +288,9 @@ function AssignContent() {
           {previewContent && (
             <Card className="mt-3">
               <Card.Body>
-                <h6 className="mb-3">Content Details</h6>
+                <h6 className="mb-3">
+                  {isBulkMode ? 'Preview (First Item)' : 'Content Details'}
+                </h6>
                 <p className="mb-2"><strong>Title:</strong> {previewContent.title}</p>
                 <p className="mb-2"><strong>Type:</strong> {previewContent.type}</p>
                 <p className="mb-2"><strong>Duration:</strong> {previewContent.duration}s</p>

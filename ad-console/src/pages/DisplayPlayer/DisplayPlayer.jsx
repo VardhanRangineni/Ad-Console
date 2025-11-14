@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { mockBackend } from '../../services/mockBackend';
 import { mockWebSocket } from '../../services/mockWebSocket';
-import { mockContent } from '../../data/mockContent';
 import SlideshowPlayer from '../../components/SlideshowPlayer/SlideshowPlayer';
 import './DisplayPlayer.css';
 
@@ -20,12 +19,11 @@ function DisplayPlayer() {
     
     const customContentStr = localStorage.getItem('customContent');
     const customContent = customContentStr ? JSON.parse(customContentStr) : [];
-    const allContent = [...mockContent, ...customContent];
     
-    console.log('All content available:', allContent);
+    console.log('All content available:', customContent);
     
     const contentList = assignments.map(a => {
-      const content = allContent.find(c => c.id === a.contentId);
+      const content = customContent.find(c => c.id === a.contentId);
       console.log(`Finding content ${a.contentId}:`, content);
       return content;
     }).filter(Boolean);
@@ -143,7 +141,7 @@ function DisplayPlayer() {
   const currentContent = playlist[currentIndex];
 
   return (
-    <div className="display-player">
+    <div className={`display-player ${device.orientation}`}>
       {currentContent.type === 'slideshow' && currentContent.slides ? (
         <SlideshowPlayer 
           slides={currentContent.slides}
