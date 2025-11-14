@@ -1,9 +1,8 @@
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
 import React, { useEffect, useRef } from 'react';
-import { Row, Col, Card, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import ReactSelect from 'react-select';
-import QRCode from 'react-qr-code';
 import * as XLSX from 'xlsx';
 import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
@@ -160,8 +159,6 @@ function DeviceManagement() {
 
   // Context and device lists must come first
   const { devices = [], loadDevices, deleteDevice } = useApp();
-  const unassignedDevices = devices.filter(d => !d.storeId);
-  const assignedDevices = devices.filter(d => d.storeId);
 
   // Load assignments from localStorage on mount
   useEffect(() => {
@@ -224,22 +221,10 @@ function DeviceManagement() {
   const [configOrientation, setConfigOrientation] = React.useState('both');
   const [configResolutionWidth, setConfigResolutionWidth] = React.useState('1920');
   const [configResolutionHeight, setConfigResolutionHeight] = React.useState('1080');
-  const [assignDevice, setAssignDevice] = React.useState(null);
+  const [, setAssignDevice] = React.useState(null);
   const [selectedAssignDeviceId, setSelectedAssignDeviceId] = React.useState('');
   const [selectedStore, setSelectedStore] = React.useState('');
-  const [allStores, setAllStores] = React.useState([
-    { id: 5, name: 'Store LA-01' },
-    { id: 6, name: 'Store LA-02' },
-    { id: 8, name: 'Store SF-01' },
-    { id: 9, name: 'Store SF-02' },
-    { id: 12, name: 'Store HOU-01' },
-    { id: 16, name: 'Store MUM-01' },
-    { id: 17, name: 'Store MUM-02' }
-  ]);
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
-  const [selectedDevice, setSelectedDevice] = React.useState(null);
-  const [showQRModal, setShowQRModal] = React.useState(false);
-  const baseUrl = window.location.origin;
 
   // Add Device orientation change handler
   const handleNewDeviceOrientationChange = (newOrientation) => {
@@ -365,11 +350,6 @@ function DeviceManagement() {
     window.location.reload();
   };
 
-  const showQRCode = (device) => {
-    setSelectedDevice(device);
-    setShowQRModal(true);
-  };
-
   const confirmDeleteDevice = (device) => {
     setDeleteDeviceState(device);
     setShowDeleteModal(true);
@@ -463,18 +443,6 @@ function DeviceManagement() {
 
     setShowAssignModal(false);
     setStagedAssignments([]);
-  };
-
-
-
-  const getDeviceUrl = (deviceId) => {
-    return `${baseUrl}/display/${deviceId}`;
-  };
-
-  const getStoreName = (storeId) => {
-    if (!storeId) return 'Not linked';
-    const store = allStores.find(s => s.id === storeId);
-    return store ? store.name : 'Unknown Store';
   };
 
   // Clone device handler (must be outside JSX)

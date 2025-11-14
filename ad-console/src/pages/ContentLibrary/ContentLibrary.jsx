@@ -21,7 +21,6 @@ function ContentLibrary() {
   const [uploadFiles, setUploadFiles] = useState([]);
   const [uploadPreviews, setUploadPreviews] = useState([]);
   const [uploadError, setUploadError] = useState('');
-  const [isSlideshow, setIsSlideshow] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
 
@@ -72,7 +71,6 @@ function ContentLibrary() {
 
     if (files.length > 1 && uploadType !== 'slideshow') {
       setUploadType('slideshow');
-      setIsSlideshow(true);
     }
 
     try {
@@ -129,10 +127,6 @@ function ContentLibrary() {
     const newPreviews = uploadPreviews.filter((_, i) => i !== index);
     setUploadFiles(newFiles);
     setUploadPreviews(newPreviews);
-
-    if (newFiles.length <= 1) {
-      setIsSlideshow(false);
-    }
   };
 
   const handleUpload = () => {
@@ -183,7 +177,6 @@ function ContentLibrary() {
       setUploadFiles([]);
       setUploadPreviews([]);
       setUploadError('');
-      setIsSlideshow(false);
       setShowUploadModal(false);
 
       window.dispatchEvent(new StorageEvent('storage', {
@@ -408,12 +401,7 @@ function ContentLibrary() {
                   <Form.Label>Content Type *</Form.Label>
                   <Form.Select 
                     value={uploadType}
-                    onChange={(e) => {
-                      setUploadType(e.target.value);
-                      if (e.target.value === 'slideshow') {
-                        setIsSlideshow(true);
-                      }
-                    }}
+                    onChange={(e) => setUploadType(e.target.value)}
                     disabled={isCompressing}
                   >
                     <option value="image">Single Image</option>
