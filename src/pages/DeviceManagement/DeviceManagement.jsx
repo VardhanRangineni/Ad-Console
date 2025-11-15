@@ -2,37 +2,42 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import ReactSelect from 'react-select';
 import AsyncSelect from 'react-select/async';
 import * as XLSX from 'xlsx';
 import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
 
 function DeviceManagement() {
+    // MAC address for config modal
+    const [configMacAddress, setConfigMacAddress] = React.useState('');
   // State to control showing the assign form inline
-  const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(false);
-    // Download template for device assignments (fixes missing function error)
-    const handleDownloadTemplate = () => {
-      // Download a CSV template for device assignments (now includes State and City columns)
-      const csvContent = 'Store ID,Device,MAC Address,State,City,Orientation\n';
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'device_assignment_template.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    };
+  const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(true);
+
+  // ...existing code...
+
+  // Download template for device assignments (fixes missing function error)
+  const handleDownloadTemplate = () => {
+    const csvContent = 'Store ID,Device,MAC Address,State,City,Orientation\n';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'device_assignment_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const fileInputRef = useRef(null);
   const [selectedStoreForAssignment, setSelectedStoreForAssignment] = React.useState(null);
   const [devicesForSelectedStore, setDevicesForSelectedStore] = React.useState([]);
   const [deviceToAssign, setDeviceToAssign] = React.useState(null);
   const [macAddressToAssign, setMacAddressToAssign] = React.useState('');
   const [orientationToAssign, setOrientationToAssign] = React.useState('');
-  const [stagedAssignments, setStagedAssignments] = React.useState([]);
-  const [stagedMacAddress, setStagedMacAddress] = React.useState('');
+
+  // MAC address validation helper (must be after macAddressToAssign is declared)
+  const isValidMac = macAddressToAssign && /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign);
   const [storeDeviceMap, setStoreDeviceMap] = React.useState([]);
   const [assignments, setAssignments] = React.useState([]); // NEW STATE for assignments
   const [activeSubTab, setActiveSubTab] = React.useState('assign');
@@ -41,11 +46,6 @@ function DeviceManagement() {
   
   // Autocomplete for manual store IDs
 
-  const handleSuggestionClick = (suggestion) => {
-    setManualStoreIds(suggestion);
-    validateManualStoreIds(suggestion);
-    // setShowSuggestions(false); // Removed undefined function
-  };
 
   // Inline assign form edit state for Assign tab
   const [assignTabEditMode, setAssignTabEditMode] = React.useState(false);
@@ -53,33 +53,10 @@ function DeviceManagement() {
   const [assignTabAssignments, setAssignTabAssignments] = React.useState([]);
 
   // Hierarchical store selection state (using storeList from PDF)
-  const [selectedHierarchy, setSelectedHierarchy] = React.useState('country');
-  const [selectedCountry, setSelectedCountry] = React.useState('India');
-  const [selectedState, setSelectedState] = React.useState('');
-  const [selectedArea, setSelectedArea] = React.useState('');
-  const [manualStoreIds, setManualStoreIds] = React.useState('');
-  const [storeIdError, setStoreIdError] = React.useState('');
 
   // Helper functions to get unique options from storeList
-  const getCountries = () => ['India'];
-  const getStates = () => selectedCountry ? [...new Set(storeList.filter(s => s.country === selectedCountry).map(s => s.state))].sort((a, b) => a.localeCompare(b)) : [];
-  const getAreas = () => selectedState ? [...new Set(storeList.filter(s => s.country === selectedCountry && s.state === selectedState).map(s => s.area))].sort((a, b) => a.localeCompare(b)) : [];
-  const getStores = () => selectedArea ? storeList.filter(s => s.country === selectedCountry && s.state === selectedState && s.area === selectedArea) : [];
 
   // Validate manual store IDs (must match a store in storeList)
-  const validateManualStoreIds = (input) => {
-    if (!input) {
-      setStoreIdError('');
-      return true;
-    }
-    const id = input.trim();
-    if (id.includes(',')) {
-      setStoreIdError('Only one store ID can be entered at a time.');
-      return false;
-    }
-    setStoreIdError('');
-    return true;
-  };
 
   // Context and device lists must come first
   const { devices = [], loadDevices, deleteDevice } = useApp();
@@ -96,16 +73,7 @@ function DeviceManagement() {
     setAssignments(assignmentsStr ? JSON.parse(assignmentsStr) : []);
     
     window.addEventListener('storage', handleStorageChange);
-      const handleDownloadTemplate = () => {
-        const worksheet = XLSX.utils.json_to_sheet([
-          { 'Store ID': 'INAPAML00001', 'Device Name': 'Samsung 4k Display', 'MAC Address': '00:1B:44:11:3A:B7' }
-        ]);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Device Assignments Template');
-        XLSX.writeFile(workbook, 'device-assignments-template.xlsx');
-      };
-    
-      return () => window.removeEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Re-calculate the store-to-device mapping whenever assignments or device models change
@@ -173,7 +141,6 @@ function DeviceManagement() {
   const [activeTab, setActiveTab] = React.useState('configurator');
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [showConfigModal, setShowConfigModal] = React.useState(false);
-  const [showAssignModal, setShowAssignModal] = React.useState(false);
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [newDeviceName, setNewDeviceName] = React.useState('');
   const [newDeviceOrientation, setNewDeviceOrientation] = React.useState('both');
@@ -185,9 +152,6 @@ function DeviceManagement() {
   const [configOrientation, setConfigOrientation] = React.useState('both');
   const [configResolutionWidth, setConfigResolutionWidth] = React.useState('1920');
   const [configResolutionHeight, setConfigResolutionHeight] = React.useState('1080');
-  const [, setAssignDevice] = React.useState(null);
-  const [selectedAssignDeviceId, setSelectedAssignDeviceId] = React.useState('');
-  const [selectedStore, setSelectedStore] = React.useState('');
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
 
   const storeOptions = useMemo(() => storeList.map(store => ({
@@ -260,6 +224,7 @@ function DeviceManagement() {
     setConfigOrientation(device.orientation || 'both');
     setConfigResolutionWidth(device.resolution?.width || 1920);
     setConfigResolutionHeight(device.resolution?.height || 1080);
+    setConfigMacAddress(device.macAddress || '');
     setShowConfigModal(true);
   };
 
@@ -340,103 +305,15 @@ function DeviceManagement() {
     }
   };
 
-  const openAssignModal = (device) => {
-    setAssignDevice(device);
-    setSelectedAssignDeviceId(device?.id || '');
-    setSelectedStore(device?.storeId || '');
-    setSelectedHierarchy('country');
-    setSelectedCountry('India');
-    setSelectedState('');
-    setSelectedArea('');
-    setManualStoreIds('');
-    setStoreIdError('');
-    setStagedAssignments([]);
-    setShowAssignModal(true);
-  };
-
-  const handleStageAssignment = () => {
-    if (!selectedAssignDeviceId || (!selectedStore && !manualStoreIds)) {
-      alert('Please select a device and a store.');
-      return;
-    }
-    if (!stagedMacAddress) {
-      alert('Please enter a MAC address.');
-      return;
-    }
-
-    const device = devices.find(d => d.id === selectedAssignDeviceId);
-    if (!device) {
-      alert('Device not found.');
-      return;
-    }
-
-    const storeId = (manualStoreIds || selectedStore).trim();
-    if (!storeId) {
-      alert('Store ID cannot be empty.');
-      return;
-    }
-
-    const store = storeList.find(s => s.id === storeId);
-    if (!store) {
-      alert(`Store with ID ${storeId} not found.`);
-      return;
-    }
-
-    const newStagedAssignment = {
-      tempId: `staged-${Date.now()}-${Math.random()}`,
-      deviceId: device.id,
-      deviceName: device.name,
-      macAddress: stagedMacAddress,
-      storeId: store.id,
-      storeName: store.name,
-      city: store.area,
-      state: store.state,
-    };
-
-    setStagedAssignments([...stagedAssignments, newStagedAssignment]);
-    setSelectedAssignDeviceId('');
-    setStagedMacAddress('');
-    setManualStoreIds('');
-    setSelectedStore('');
-  };
-
-  const handleRemoveStagedAssignment = (tempId) => {
-    setStagedAssignments(stagedAssignments.filter(a => a.tempId !== tempId));
-  };
-
-  const handleAssignToStore = () => {
-    if (stagedAssignments.length === 0) {
-      alert('Please add at least one device-store assignment.');
-      return;
-    }
-
-    const assignmentsStr = localStorage.getItem('deviceAssignments');
-    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-
-    const newAssignments = stagedAssignments.map((staged, index) => ({
-      assignmentId: `${Date.now()}-${index}`, // Create a unique ID for the assignment
-      deviceId: staged.deviceId,
-      storeId: staged.storeId,
-      macAddress: staged.macAddress,
-      active: true, // Default to active
-    }));
-
-    const updatedAssignments = [...allAssignments, ...newAssignments];
-    
-    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-    
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'deviceAssignments',
-      newValue: JSON.stringify(updatedAssignments)
-    }));
-
-    setShowAssignModal(false);
-    setStagedAssignments([]);
-  };
+  // Removed unused: openAssignModal, handleStageAssignment, handleRemoveStagedAssignment, handleAssignToStore
 
   const handleAssignNewDevice = () => {
     if (!selectedStoreForAssignment || !deviceToAssign || !macAddressToAssign || !orientationToAssign) {
       alert('Please fill all fields.');
+      return;
+    }
+    if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)) {
+      alert('Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)');
       return;
     }
 
@@ -600,12 +477,6 @@ function DeviceManagement() {
     };
     reader.readAsArrayBuffer(file);
   };
-  // Handler for Deactivate toggle in Assign tab
-  const handleAssignTabDeviceToggle = (assignmentId) => {
-    setAssignTabAssignments(prev => prev.map(d =>
-      d.assignmentId === assignmentId ? { ...d, active: !d.active } : d
-    ));
-  };
 
   // Save Changes in Assign tab (writes to localStorage, returns to List View)
   const handleAssignTabSaveChanges = () => {
@@ -699,7 +570,6 @@ function DeviceManagement() {
                 </thead>
                 <tbody>
                   {devices.map(device => {
-                    const assignment = assignments.find(a => a.deviceId === device.id);
                     return (
                       <tr key={device.id}>
                         <td>{device.id}</td>
@@ -852,7 +722,7 @@ function DeviceManagement() {
                                   maxLength={17}
                                   onChange={e => {
                                     let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
-                                    // Insert : after every 2 chars, but not at the end
+                                    value = value.slice(0, 12); // Limit to 12 hex digits
                                     value = value.match(/.{1,2}/g)?.join(':') || '';
                                     setMacAddressToAssign(value);
                                   }}
@@ -904,11 +774,11 @@ function DeviceManagement() {
                             })()}
                             <Col md={2}>
                                 <Button 
-                                    variant="primary" 
-                                    onClick={handleAssignNewDevice}
-                                    disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign}
-                                    >
-                                    Assign Device
+                                  variant="primary" 
+                                  onClick={handleAssignNewDevice}
+                                  disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign || !isValidMac}
+                                >
+                                  Assign Device
                                 </Button>
                             </Col>
                           </Row>
@@ -1015,14 +885,24 @@ function DeviceManagement() {
                         </Col>
                         <Col md={3}>
                           <Form.Group>
-                            <Form.Label>MAC Address</Form.Label>
-                            <Form.Control
-                              type="text"
-                              placeholder="00:00:00:00:00:00"
-                              value={macAddressToAssign}
-                              onChange={e => setMacAddressToAssign(e.target.value)}
-                            />
-                          </Form.Group>
+                                <Form.Label>MAC Address</Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="00:00:00:00:00:00"
+                                  value={macAddressToAssign}
+                                  maxLength={17}
+                                  onChange={e => {
+                                    let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                    value = value.slice(0, 12); // Limit to 12 hex digits
+                                    value = value.match(/.{1,2}/g)?.join(':') || '';
+                                    setMacAddressToAssign(value);
+                                  }}
+                                  isInvalid={!!macAddressToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)}
+                                />
+                                <Form.Control.Feedback type="invalid">
+                                  Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                                </Form.Control.Feedback>
+                              </Form.Group>
                         </Col>
                         {deviceToAssign && (() => {
                             const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
@@ -1388,6 +1268,26 @@ function DeviceManagement() {
                 placeholder="e.g., Store LA-01 Display"
               />
             </Form.Group>
+            {/* MAC Address */}
+            <Form.Group className="mb-3">
+              <Form.Label>MAC Address *</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="00:00:00:00:00:00"
+                value={configMacAddress}
+                maxLength={17}
+                onChange={e => {
+                  let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                  value = value.slice(0, 12); // Limit to 12 hex digits
+                  value = value.match(/.{1,2}/g)?.join(':') || '';
+                  setConfigMacAddress(value);
+                }}
+                isInvalid={!!configMacAddress && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(configMacAddress)}
+              />
+              <Form.Control.Feedback type="invalid">
+                Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)
+              </Form.Control.Feedback>
+            </Form.Group>
 
             {/* Orientation */}
             <Form.Group className="mb-3">
@@ -1632,5 +1532,4 @@ function DeviceManagement() {
     </div>
   );
 }
-
 export default DeviceManagement;
