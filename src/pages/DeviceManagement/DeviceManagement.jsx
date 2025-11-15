@@ -1,130 +1,56 @@
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import ReactSelect from 'react-select';
+import AsyncSelect from 'react-select/async';
 import * as XLSX from 'xlsx';
 import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
 
 function DeviceManagement() {
+  // State to control showing the assign form inline
+  const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(false);
+    // Download template for device assignments (fixes missing function error)
+    const handleDownloadTemplate = () => {
+      // Download a CSV template for device assignments (now includes State and City columns)
+      const csvContent = 'Store ID,Device,MAC Address,State,City,Orientation\n';
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'device_assignment_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
   const fileInputRef = useRef(null);
-  const [storeIdSuggestions, setStoreIdSuggestions] = React.useState([]);
-  const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [selectedStoreForAssignment, setSelectedStoreForAssignment] = React.useState(null);
+  const [devicesForSelectedStore, setDevicesForSelectedStore] = React.useState([]);
+  const [deviceToAssign, setDeviceToAssign] = React.useState(null);
+  const [macAddressToAssign, setMacAddressToAssign] = React.useState('');
+  const [orientationToAssign, setOrientationToAssign] = React.useState('');
   const [stagedAssignments, setStagedAssignments] = React.useState([]);
   const [stagedMacAddress, setStagedMacAddress] = React.useState('');
   const [storeDeviceMap, setStoreDeviceMap] = React.useState([]);
   const [assignments, setAssignments] = React.useState([]); // NEW STATE for assignments
+  const [activeSubTab, setActiveSubTab] = React.useState('assign');
   
-  // State for Edit Store Modal
-  const [showEditStoreModal, setShowEditStoreModal] = React.useState(false);
-  const [editingStore, setEditingStore] = React.useState(null);
-  const [editableDevices, setEditableDevices] = React.useState([]);
-  const [deviceToAdd, setDeviceToAdd] = React.useState('');
-  const [deviceToAddMac, setDeviceToAddMac] = React.useState('');
+  // ...removed Edit Store Modal state...
   
   // Autocomplete for manual store IDs
-  const handleManualStoreIdChange = (e) => {
-    const value = e.target.value;
-    setManualStoreIds(value);
-    validateManualStoreIds(value);
-    // Show suggestions for the last segment
-    const last = value.split(',').pop().trim().toUpperCase();
-    if (last.length >= 3) {
-      const matches = storeList
-        .map(s => s.id)
-        .filter(id => id.toUpperCase().startsWith(last) && !value.split(',').map(v => v.trim().toUpperCase()).includes(id.toUpperCase()));
-      setStoreIdSuggestions(matches.slice(0, 10));
-      setShowSuggestions(true);
-    } else {
-      setStoreIdSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
 
   const handleSuggestionClick = (suggestion) => {
-    // Replace last segment with suggestion
-    let parts = manualStoreIds.split(',');
-    parts[parts.length - 1] = suggestion;
-    const newValue = parts.join(', ').replace(/,\s*$/, '');
-    setManualStoreIds(newValue);
-    validateManualStoreIds(newValue);
-    setShowSuggestions(false);
+    setManualStoreIds(suggestion);
+    validateManualStoreIds(suggestion);
+    // setShowSuggestions(false); // Removed undefined function
   };
 
-  const openEditStoreModal = (store) => {
-    setEditingStore(store);
-    setEditableDevices(store.devices.map(d => ({ ...d, active: d.active !== false })));
-    setDeviceToAddMac('');
-    setShowEditStoreModal(true);
-  };
-
-  const handleDeviceStatusToggle = (assignmentId) => {
-    setEditableDevices(
-      editableDevices.map(d =>
-        d.assignmentId === assignmentId ? { ...d, active: !d.active } : d
-      )
-    );
-  };
-
-  const handleRemoveDeviceFromStore = (assignmentId) => {
-    setEditableDevices(editableDevices.filter(d => d.assignmentId !== assignmentId));
-  };
-
-  const handleAddDeviceToStore = () => {
-    if (!deviceToAdd) {
-      alert('Please select a device to add.');
-      return;
-    }
-    if (!deviceToAddMac) {
-      alert('Please enter a MAC address.');
-      return;
-    }
-    const device = devices.find(d => d.id === deviceToAdd);
-    if (device) {
-      const newEditableDevice = {
-        ...device,
-        assignmentId: `new-${Date.now()}`, // Temp ID
-        macAddress: deviceToAddMac,
-        active: true,
-        isNew: true
-      };
-      setEditableDevices([...editableDevices, newEditableDevice]);
-      setDeviceToAdd('');
-      setDeviceToAddMac('');
-    }
-  };
-
-  const handleSaveChanges = () => {
-    if (!editingStore) return;
-
-    const assignmentsStr = localStorage.getItem('deviceAssignments');
-    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-
-    // Filter out all previous assignments for the current store
-    const otherStoreAssignments = allAssignments.filter(a => a.storeId !== editingStore.id);
-
-    // Create new assignments from the editableDevices list
-    const newStoreAssignments = editableDevices.map((d, index) => ({
-      assignmentId: d.assignmentId.startsWith('new-') ? `${Date.now()}-${index}` : d.assignmentId,
-      deviceId: d.id,
-      storeId: editingStore.id,
-      macAddress: d.macAddress,
-      active: d.active,
-    }));
-
-    // Combine and save
-    const updatedAssignments = [...otherStoreAssignments, ...newStoreAssignments];
-    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'deviceAssignments',
-      newValue: JSON.stringify(updatedAssignments)
-    }));
-
-    setShowEditStoreModal(false);
-    setEditingStore(null);
-    setEditableDevices([]);
-  };
+  // Inline assign form edit state for Assign tab
+  const [assignTabEditMode, setAssignTabEditMode] = React.useState(false);
+  // Track staged changes for Assign tab (deactivate toggles)
+  const [assignTabAssignments, setAssignTabAssignments] = React.useState([]);
 
   // Hierarchical store selection state (using storeList from PDF)
   const [selectedHierarchy, setSelectedHierarchy] = React.useState('country');
@@ -140,17 +66,15 @@ function DeviceManagement() {
   const getAreas = () => selectedState ? [...new Set(storeList.filter(s => s.country === selectedCountry && s.state === selectedState).map(s => s.area))].sort((a, b) => a.localeCompare(b)) : [];
   const getStores = () => selectedArea ? storeList.filter(s => s.country === selectedCountry && s.state === selectedState && s.area === selectedArea) : [];
 
-  // Validate manual store IDs (comma-separated, must match a store in storeList)
+  // Validate manual store IDs (must match a store in storeList)
   const validateManualStoreIds = (input) => {
     if (!input) {
       setStoreIdError('');
       return true;
     }
-    const ids = input.split(',').map(id => id.trim()).filter(Boolean);
-    const allStoresFlat = storeList.map(s => s.id);
-    const invalid = ids.filter(id => !allStoresFlat.includes(id));
-    if (invalid.length > 0) {
-      setStoreIdError(`Invalid store IDs: ${invalid.join(', ')}`);
+    const id = input.trim();
+    if (id.includes(',')) {
+      setStoreIdError('Only one store ID can be entered at a time.');
       return false;
     }
     setStoreIdError('');
@@ -172,7 +96,16 @@ function DeviceManagement() {
     setAssignments(assignmentsStr ? JSON.parse(assignmentsStr) : []);
     
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+      const handleDownloadTemplate = () => {
+        const worksheet = XLSX.utils.json_to_sheet([
+          { 'Store ID': 'INAPAML00001', 'Device Name': 'Samsung 4k Display', 'MAC Address': '00:1B:44:11:3A:B7' }
+        ]);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Device Assignments Template');
+        XLSX.writeFile(workbook, 'device-assignments-template.xlsx');
+      };
+    
+      return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   // Re-calculate the store-to-device mapping whenever assignments or device models change
@@ -182,28 +115,59 @@ function DeviceManagement() {
       if (!acc[storeId]) {
         const storeDetails = storeList.find(s => s.id === storeId);
         acc[storeId] = {
-          ...(storeDetails || { id: storeId, name: 'Unknown Store' }),
+          id: storeId,
+          name: storeDetails ? storeDetails.name : assignment.storeName || 'Unknown Store',
+          area: storeDetails ? storeDetails.area : assignment.area || '',
+          state: storeDetails ? storeDetails.state : assignment.state || '',
           deviceCount: 0,
           devices: [] // This will hold device instances with assignment info
         };
       }
-      
       const deviceModel = devices.find(d => d.id === assignment.deviceId);
       if (deviceModel) {
         acc[storeId].deviceCount++;
-        // Add the assignmentId to make each item unique, which is crucial for editing/deleting
         acc[storeId].devices.push({ 
           ...deviceModel, 
           assignmentId: assignment.assignmentId,
           macAddress: assignment.macAddress,
+          orientation: assignment.orientation || deviceModel.orientation,
           active: assignment.active !== false // Default to true
         });
       }
       return acc;
     }, {});
-
     setStoreDeviceMap(Object.values(groupedByStore));
   }, [assignments, devices]);
+  // List View column-wise filter state
+  const [listViewStoreIdFilter, setListViewStoreIdFilter] = React.useState('');
+  const [listViewStoreNameFilter, setListViewStoreNameFilter] = React.useState('');
+  const [listViewCityFilter, setListViewCityFilter] = React.useState('');
+  const [listViewStateFilter, setListViewStateFilter] = React.useState('');
+
+  useEffect(() => {
+    if (selectedStoreForAssignment) {
+      const storeData = storeDeviceMap.find(s => s.id === selectedStoreForAssignment.value);
+      setDevicesForSelectedStore(storeData ? storeData.devices : []);
+      // When a store is selected, initialize assignTabAssignments for editing
+      setAssignTabAssignments(storeData ? storeData.devices.map(d => ({ ...d })) : []);
+      setAssignTabEditMode(false);
+    } else {
+      setDevicesForSelectedStore([]);
+      setAssignTabAssignments([]);
+      setAssignTabEditMode(false);
+    }
+  }, [selectedStoreForAssignment, storeDeviceMap]);
+
+  useEffect(() => {
+    if (deviceToAssign) {
+      const device = devices.find(d => d.id === deviceToAssign);
+      if (device && device.orientation !== 'both') {
+        setOrientationToAssign(device.orientation);
+      } else {
+        setOrientationToAssign(''); // Reset if it's 'both' so user has to choose
+      }
+    }
+  }, [deviceToAssign, devices]);
 
   // ...existing hooks...
   const [activeTab, setActiveTab] = React.useState('configurator');
@@ -225,6 +189,19 @@ function DeviceManagement() {
   const [selectedAssignDeviceId, setSelectedAssignDeviceId] = React.useState('');
   const [selectedStore, setSelectedStore] = React.useState('');
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
+
+  const storeOptions = useMemo(() => storeList.map(store => ({
+    value: store.id,
+    label: `${store.name} (${store.id})`
+  })), []);
+
+  // Async load options for better performance
+  const loadStoreOptions = (inputValue, callback) => {
+    const filtered = storeOptions.filter(option =>
+      option.label.toLowerCase().includes(inputValue.toLowerCase())
+    );
+    setTimeout(() => callback(filtered), 100); // debounce for smoother UX
+  };
 
   // Add Device orientation change handler
   const handleNewDeviceOrientationChange = (newOrientation) => {
@@ -385,7 +362,7 @@ function DeviceManagement() {
     if (!stagedMacAddress) {
       alert('Please enter a MAC address.');
       return;
-  }
+    }
 
     const device = devices.find(d => d.id === selectedAssignDeviceId);
     if (!device) {
@@ -393,22 +370,34 @@ function DeviceManagement() {
       return;
     }
 
-    const storeId = selectedStore || manualStoreIds;
-    const storeName = storeList.find(s => s.id === storeId)?.name || storeId;
+    const storeId = (manualStoreIds || selectedStore).trim();
+    if (!storeId) {
+      alert('Store ID cannot be empty.');
+      return;
+    }
 
-    // Add a temporary unique ID for staging purposes
-    const stagedAssignment = {
-      tempId: `staged-${Date.now()}-${Math.random()}`, // Unique ID
+    const store = storeList.find(s => s.id === storeId);
+    if (!store) {
+      alert(`Store with ID ${storeId} not found.`);
+      return;
+    }
+
+    const newStagedAssignment = {
+      tempId: `staged-${Date.now()}-${Math.random()}`,
       deviceId: device.id,
       deviceName: device.name,
       macAddress: stagedMacAddress,
-      storeId,
-      storeName
+      storeId: store.id,
+      storeName: store.name,
+      city: store.area,
+      state: store.state,
     };
 
-    setStagedAssignments([...stagedAssignments, stagedAssignment]);
-    setSelectedAssignDeviceId(''); // Reset dropdown
+    setStagedAssignments([...stagedAssignments, newStagedAssignment]);
+    setSelectedAssignDeviceId('');
     setStagedMacAddress('');
+    setManualStoreIds('');
+    setSelectedStore('');
   };
 
   const handleRemoveStagedAssignment = (tempId) => {
@@ -445,6 +434,50 @@ function DeviceManagement() {
     setStagedAssignments([]);
   };
 
+  const handleAssignNewDevice = () => {
+    if (!selectedStoreForAssignment || !deviceToAssign || !macAddressToAssign || !orientationToAssign) {
+      alert('Please fill all fields.');
+      return;
+    }
+
+    const assignmentsStr = localStorage.getItem('deviceAssignments');
+    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
+
+    const newAssignment = {
+      assignmentId: `${Date.now()}-new`,
+      deviceId: deviceToAssign,
+      storeId: selectedStoreForAssignment.value,
+      macAddress: macAddressToAssign,
+      orientation: orientationToAssign,
+      active: true,
+    };
+
+    const updatedAssignments = [...allAssignments, newAssignment];
+    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'deviceAssignments',
+      newValue: JSON.stringify(updatedAssignments)
+    }));
+
+    // Reset form
+    setDeviceToAssign(null);
+    setMacAddressToAssign('');
+    setOrientationToAssign('');
+  };
+
+  const handleDeleteStore = (storeId) => {
+    if (window.confirm(`Are you sure you want to delete all assignments for store ${storeId}?`)) {
+        const assignmentsStr = localStorage.getItem('deviceAssignments');
+        let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
+        const updatedAssignments = allAssignments.filter(a => a.storeId !== storeId);
+        localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: 'deviceAssignments',
+            newValue: JSON.stringify(updatedAssignments)
+        }));
+    }
+};
+
   // Clone device handler (must be outside JSX)
   const handleCloneDevice = (device) => {
     setNewDeviceName('');
@@ -466,14 +499,28 @@ function DeviceManagement() {
             'City': store.area,
             'State': store.state,
             'Device': device.name,
+            'DeviceID': device.id,
             'MAC Address': device.macAddress,
             'Status': device.active ? 'Active' : 'Inactive',
+            'Orientation': device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A'),
           });
         });
       }
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    // Create worksheet and add bold headers
+    const headers = [
+      'Store ID', 'Store Name', 'City', 'State', 'Device', 'DeviceID', 'MAC Address', 'Status', 'Orientation'
+    ];
+    const worksheet = XLSX.utils.json_to_sheet([]);
+    XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A1' });
+    XLSX.utils.sheet_add_json(worksheet, dataToExport, { origin: 'A2', skipHeader: true });
+    // Bold header row
+    headers.forEach((header, idx) => {
+      const cell = worksheet[String.fromCharCode(65 + idx) + '1'];
+      if (cell && !cell.s) cell.s = {};
+      if (cell) cell.s = { ...cell.s, font: { bold: true } };
+    });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Device Assignments');
     XLSX.writeFile(workbook, 'device-assignments.xlsx');
@@ -500,17 +547,28 @@ function DeviceManagement() {
         const deviceName = row['Device'] ? String(row['Device']).trim() : '';
         const storeId = row['Store ID'] ? String(row['Store ID']).trim() : '';
         const macAddress = row['MAC Address'] ? String(row['MAC Address']).trim() : '';
+        let orientation = row['Orientation'] ? String(row['Orientation']).trim().toLowerCase() : '';
+
+        // Map user-friendly terms to internal values
+        if (orientation === 'landscape') orientation = 'horizontal';
+        if (orientation === 'portrait') orientation = 'vertical';
 
         if (!deviceName || !storeId || !macAddress) {
           return null;
         }
 
         const device = devices.find(d => d.name === deviceName);
+        // Acceptable values: 'horizontal', 'vertical', 'both', or fallback to device.orientation
+        let normalizedOrientation = orientation;
+        if (!['horizontal', 'vertical', 'both'].includes(normalizedOrientation)) {
+          normalizedOrientation = device ? device.orientation : '';
+        }
         return {
           assignmentId: `${Date.now()}-${index}`,
           deviceId: device ? device.id : null,
           storeId: storeId,
           macAddress: macAddress,
+          orientation: normalizedOrientation,
           active: true,
           originalRow: row, // Keep track for error reporting
         };
@@ -541,6 +599,51 @@ function DeviceManagement() {
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+  // Handler for Deactivate toggle in Assign tab
+  const handleAssignTabDeviceToggle = (assignmentId) => {
+    setAssignTabAssignments(prev => prev.map(d =>
+      d.assignmentId === assignmentId ? { ...d, active: !d.active } : d
+    ));
+  };
+
+  // Save Changes in Assign tab (writes to localStorage, returns to List View)
+  const handleAssignTabSaveChanges = () => {
+    if (!selectedStoreForAssignment) return;
+    const assignmentsStr = localStorage.getItem('deviceAssignments');
+    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
+    // Remove all assignments for this store
+    const otherAssignments = allAssignments.filter(a => a.storeId !== selectedStoreForAssignment.value);
+    // Add updated assignments
+    const updatedAssignments = [
+      ...otherAssignments,
+      ...assignTabAssignments.map(d => ({
+        assignmentId: d.assignmentId,
+        deviceId: d.id,
+        storeId: selectedStoreForAssignment.value,
+        macAddress: d.macAddress,
+        orientation: d.orientation,
+        active: d.active,
+      }))
+    ];
+    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'deviceAssignments',
+      newValue: JSON.stringify(updatedAssignments)
+    }));
+    // Return to List View
+    setActiveSubTab('listView');
+    setSelectedStoreForAssignment(null);
+    setAssignTabEditMode(false);
+  };
+
+  // List View Edit button handler: go to Assign tab, select store, open assign form in edit mode
+  const handleListViewEdit = (store) => {
+    setActiveSubTab('assign');
+    setActiveTab('assign');
+    setSelectedStoreForAssignment({ value: store.id, label: `${store.name} (${store.id})` });
+    setShowInlineAssignForm(true);
+    setAssignTabEditMode(true);
   };
 
   return (
@@ -587,11 +690,10 @@ function DeviceManagement() {
               <table className="table table-bordered align-middle">
                 <thead className="table-light">
                   <tr>
-                    <th>Name</th>
                     <th>Device ID</th>
-                    <th>MAC Address</th>
+                    <th>Device Name</th>
                     <th>Resolution</th>
-                    <th>Orientation</th>
+                    <th>Possible Orientation</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -600,15 +702,14 @@ function DeviceManagement() {
                     const assignment = assignments.find(a => a.deviceId === device.id);
                     return (
                       <tr key={device.id}>
-                        <td>{device.name}</td>
-                        <td className="font-monospace small">{device.id}</td>
-                        <td>{assignment ? assignment.macAddress : 'N/A'}</td>
+                        <td>{device.id}</td>
+                        <td className="font-monospace small">{device.name}</td>
                         <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
                         <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}</td>
                         <td>
                           <OverlayTrigger
                             placement="top"
-                            overlay={<Tooltip id={`tooltip-edit-${device.id}`} className="custom-tooltip">Edit/Configure</Tooltip>}
+                            overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
                           >
                             <Button 
                               variant="primary" 
@@ -621,7 +722,7 @@ function DeviceManagement() {
                           </OverlayTrigger>
                           <OverlayTrigger
                             placement="top"
-                            overlay={<Tooltip id={`tooltip-clone-${device.id}`} className="custom-tooltip">Clone</Tooltip>}
+                            overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
                           >
                             <Button 
                               variant="secondary" 
@@ -634,7 +735,7 @@ function DeviceManagement() {
                           </OverlayTrigger>
                           <OverlayTrigger
                             placement="top"
-                            overlay={<Tooltip id={`tooltip-delete-${device.id}`} className="custom-tooltip">Delete</Tooltip>}
+                            overlay={<Tooltip id={`tooltip-delete-${device.id}`}>Delete</Tooltip>}
                           >
                             <Button 
                               variant="danger" 
@@ -654,7 +755,7 @@ function DeviceManagement() {
           )}
         </Tab>
 
-        {/* TAB 2: DEVICE STORE MAPPING - WITH TOP RIGHT BUTTON */}
+        {/* TAB 2: DEVICE STORE MAPPING - WITH NESTED TABS */}
         <Tab 
           eventKey="assign" 
           title={
@@ -664,67 +765,425 @@ function DeviceManagement() {
             </>
           }
         >
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div></div>
-            <div>
-              <Button variant="success" className="me-2" onClick={handleDownload}>
-                <i className="bi bi-download me-2"></i>
-                Download
-              </Button>
-              <Button variant="info" className="me-2" onClick={() => fileInputRef.current.click()}>
-                <i className="bi bi-upload me-2"></i>
-                Upload
-              </Button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
-                accept=".xlsx, .xls"
-              />
-              <Button variant="primary" onClick={() => openAssignModal(null)}>
-                <i className="bi bi-link-45deg me-2"></i>
-                Assign
-              </Button>
-            </div>
-          </div>
-          
-          {storeDeviceMap.length > 0 ? (
-            <div className="table-responsive">
-              <table className="table table-bordered align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th>Store ID</th>
-                    <th>City</th>
-                    <th>State</th>
-                    <th>Count of Devices</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {storeDeviceMap.map(store => (
-                    <tr key={store.id}>
-                      <td>{store.id}</td>
-                      <td>{store.area}</td>
-                      <td>{store.state}</td>
-                      <td>{store.deviceCount}</td>
-                      <td>
-                        <Button variant="outline-primary" size="sm" className="ms-2" onClick={() => openEditStoreModal(store)}>
-                          <i className="bi bi-pencil-square me-2"></i>
-                          Edit
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Alert variant="info">
-              <i className="bi bi-info-circle me-2"></i>
-              No devices have been assigned to a store yet.
-            </Alert>
-          )}
+          <Tabs
+            id="device-store-mapping-sub-tabs"
+            activeKey={activeSubTab}
+            onSelect={(k) => setActiveSubTab(k)}
+            className="mb-3"
+          >
+            <Tab eventKey="assign" title="Assign">
+              <div className="d-flex justify-content-end align-items-center mb-3">
+                <Button variant="outline-secondary" className="me-2" onClick={handleDownloadTemplate}>
+                  <i className="bi bi-file-earmark-arrow-down me-2"></i>
+                  Download Template
+                </Button>
+                <Button variant="info" className="me-2" onClick={() => fileInputRef.current.click()}>
+                  <i className="bi bi-upload me-2"></i>
+                  Upload Assignments
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                  accept=".xlsx, .xls"
+                />
+              </div>
+            <Row>
+                <Col md={7} style={{ width: '60%' }} className="d-flex align-items-end">
+                  <Form.Group className="mb-3 flex-grow-1 me-2">
+                    <Form.Label>Search for a store by ID or name</Form.Label>
+                    <AsyncSelect
+                      cacheOptions
+                      defaultOptions={storeOptions.slice(0, 30)}
+                      loadOptions={loadStoreOptions}
+                      isClearable
+                      placeholder="Type to search..."
+                      value={selectedStoreForAssignment}
+                      onChange={(selected) => {
+                        setSelectedStoreForAssignment(selected);
+                        setDeviceToAssign(null);
+                        setMacAddressToAssign('');
+                        setOrientationToAssign('');
+                      }}
+                    />
+                  </Form.Group>
+                  {selectedStoreForAssignment && devicesForSelectedStore.length > 0 && (
+                    <Button
+                      variant="primary"
+                      className="mb-3"
+                      onClick={() => setShowInlineAssignForm(v => !v)}
+                    >
+                      <i className="bi bi-plus-circle me-2"></i>
+                      {showInlineAssignForm ? 'Hide Assign Form' : 'Assign Device'}
+                    </Button>
+                  )}
+                </Col>
+              </Row>
+
+              {selectedStoreForAssignment && (
+                <>
+                  {devicesForSelectedStore.length > 0 ? (
+                    <div className="mt-4">
+                      {showInlineAssignForm && (
+                        <>
+                               <br></br>
+                          <h5>Assign a New Device to {selectedStoreForAssignment.label}</h5>
+                          <Row className="align-items-end mb-4">
+                            <Col md={4}>
+                              <Form.Group>
+                                <Form.Label>Select Device Model</Form.Label>
+                                <Form.Select
+                                  value={deviceToAssign || ''}
+                                  onChange={e => setDeviceToAssign(e.target.value)}
+                                >
+                                  <option value="">-- Select Device --</option>
+                                  {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                </Form.Select>
+                              </Form.Group>
+                            </Col>
+                            <Col md={3}>
+                              <Form.Group>
+                                <Form.Label>MAC Address</Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="00:00:00:00:00:00"
+                                  value={macAddressToAssign}
+                                  maxLength={17}
+                                  onChange={e => {
+                                    let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                    // Insert : after every 2 chars, but not at the end
+                                    value = value.match(/.{1,2}/g)?.join(':') || '';
+                                    setMacAddressToAssign(value);
+                                  }}
+                                  isInvalid={!!macAddressToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)}
+                                />
+                                <Form.Control.Feedback type="invalid">
+                                  Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                                </Form.Control.Feedback>
+                              </Form.Group>
+                            </Col>
+                            {deviceToAssign && (() => {
+                                const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
+                                if (!selectedDeviceForAssignment) return null;
+                                return (
+                                    <Col md={3}>
+                                        <Form.Group>
+                                        <Form.Label>Orientation</Form.Label>
+                                        {selectedDeviceForAssignment.orientation === 'both' ? (
+                                            <div>
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id="orientation-horizontal-radio"
+                                                label={<label htmlFor="orientation-horizontal-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
+                                                name="orientation"
+                                                value="horizontal"
+                                                checked={orientationToAssign === 'horizontal'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id="orientation-vertical-radio"
+                                                label={<label htmlFor="orientation-vertical-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
+                                                name="orientation"
+                                                value="vertical"
+                                                checked={orientationToAssign === 'vertical'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                            </div>
+                                        ) : (
+                                            <p className="form-control-static" style={{ paddingTop: '7px' }}>
+                                            {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}
+                                            </p>
+                                        )}
+                                        </Form.Group>
+                                    </Col>
+                                );
+                            })()}
+                            <Col md={2}>
+                                <Button 
+                                    variant="primary" 
+                                    onClick={handleAssignNewDevice}
+                                    disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign}
+                                    >
+                                    Assign Device
+                                </Button>
+                            </Col>
+                          </Row>
+                          <div className="d-flex justify-content-end mt-3">
+                            <Button variant="primary" onClick={() => {
+                              // Save assignTabAssignments to localStorage for this store
+                              const assignmentsStr = localStorage.getItem('deviceAssignments');
+                              let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
+                              // Remove assignments for this store
+                              allAssignments = allAssignments.filter(a => a.storeId !== selectedStoreForAssignment.value);
+                              // Add back the edited assignments
+                              const newAssignments = assignTabAssignments.map(d => ({
+                                assignmentId: d.assignmentId,
+                                deviceId: d.id,
+                                storeId: selectedStoreForAssignment.value,
+                                macAddress: d.macAddress,
+                                orientation: d.orientation,
+                                active: d.active
+                              }));
+                              const updatedAssignments = [...allAssignments, ...newAssignments];
+                              localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
+                              window.dispatchEvent(new StorageEvent('storage', {
+                                key: 'deviceAssignments',
+                                newValue: JSON.stringify(updatedAssignments)
+                              }));
+                              setActiveTab('assign');
+                              setActiveSubTab('listView');
+                            }}>
+                              <i className="bi bi-save me-2"></i>
+                              Save Changes
+                            </Button>
+                          </div>
+                        </>
+                      )}
+                      <h5>Assigned Devices for {selectedStoreForAssignment.label}</h5>
+                      <div className="table-responsive mb-4">
+                        <table className="table table-bordered align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Device Name</th>
+                              <th>Device ID</th>
+                              <th>MAC Address</th>
+                              <th>Orientation</th>
+                              <th>Status</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {assignTabAssignments.map(device => (
+                              <tr key={device.assignmentId}>
+                                <td>{device.name}</td>
+                                <td>{device.id}</td>
+                                <td>{device.macAddress}</td>
+                                <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A')}</td>
+                                <td>
+                                  <Badge bg={device.active ? 'success' : 'danger'}>
+                                    {device.active ? 'Active' : 'Inactive'}
+                                  </Badge>
+                                </td>
+                                <td className="d-flex gap-2 align-items-center">
+                                  <Form.Check
+                                    type="switch"
+                                    id={`switch-assign-${device.assignmentId}`}
+                                    checked={device.active}
+                                    onChange={() => {
+                                      setAssignTabAssignments(prev => prev.map(d =>
+                                        d.assignmentId === device.assignmentId ? { ...d, active: !d.active } : d
+                                      ));
+                                    }}
+                                    label={device.active ? 'Deactivate' : 'Activate'}
+                                  />
+                                  <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id={`tooltip-delete-assign-${device.assignmentId}`}>Delete</Tooltip>}
+                                  >
+                                    <Button variant="outline-danger" size="sm" onClick={() => {
+                                      setAssignTabAssignments(prev => prev.filter(d => d.assignmentId !== device.assignmentId));
+                                    }}>
+                                      <i className="bi bi-trash"></i>
+                                    </Button>
+                                  </OverlayTrigger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4">
+                      <h5>Assign a New Device to {selectedStoreForAssignment.label}</h5>
+                      <Row className="align-items-end">
+                        <Col md={4}>
+                          <Form.Group>
+                            <Form.Label>Select Device Model</Form.Label>
+                            <Form.Select
+                              value={deviceToAssign || ''}
+                              onChange={e => setDeviceToAssign(e.target.value)}
+                            >
+                              <option value="">-- Select Device --</option>
+                              {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            </Form.Select>
+                          </Form.Group>
+                        </Col>
+                        <Col md={3}>
+                          <Form.Group>
+                            <Form.Label>MAC Address</Form.Label>
+                            <Form.Control
+                              type="text"
+                              placeholder="00:00:00:00:00:00"
+                              value={macAddressToAssign}
+                              onChange={e => setMacAddressToAssign(e.target.value)}
+                            />
+                          </Form.Group>
+                        </Col>
+                        {deviceToAssign && (() => {
+                            const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
+                            if (!selectedDeviceForAssignment) return null;
+                            return (
+                                <Col md={3}>
+                                    <Form.Group>
+                                    <Form.Label>Orientation</Form.Label>
+                                    {selectedDeviceForAssignment.orientation === 'both' ? (
+                                        <div>
+                                        <Form.Check
+                                            inline
+                                            type="radio"
+                                            label="Landscape"
+                                            name="orientation"
+                                            value="horizontal"
+                                            checked={orientationToAssign === 'horizontal'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                        />
+                                        <Form.Check
+                                            inline
+                                            type="radio"
+                                            label="Portrait"
+                                            name="orientation"
+                                            value="vertical"
+                                            checked={orientationToAssign === 'vertical'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                        />
+                                        </div>
+                                    ) : (
+                                        <p className="form-control-static" style={{ paddingTop: '7px' }}>
+                                        {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'} <Badge bg="info">Auto</Badge>
+                                        </p>
+                                    )}
+                                    </Form.Group>
+                                </Col>
+                            );
+                        })()}
+                        <Col md={2}>
+                            <Button 
+                                variant="primary" 
+                                onClick={handleAssignNewDevice}
+                                disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign}
+                                >
+                                Assign Device
+                            </Button>
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+                </>
+              )}
+            </Tab>
+            <Tab eventKey="listView" title="List View">
+              <div className="d-flex justify-content-end align-items-center mb-3">
+                <Button variant="success" className="me-2" onClick={handleDownload}>
+                  <i className="bi bi-download me-2"></i>
+                  Download
+                </Button>
+              </div>
+              {storeDeviceMap.length > 0 ? (
+                <div className="table-responsive">
+                  <table className="table table-bordered align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th>
+                          Store ID
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStoreIdFilter}
+                            onChange={e => setListViewStoreIdFilter(e.target.value)}
+                            style={{ minWidth: 80, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          Store Name
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStoreNameFilter}
+                            onChange={e => setListViewStoreNameFilter(e.target.value)}
+                            style={{ minWidth: 120, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          City
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewCityFilter}
+                            onChange={e => setListViewCityFilter(e.target.value)}
+                            style={{ minWidth: 100, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          State
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStateFilter}
+                            onChange={e => setListViewStateFilter(e.target.value)}
+                            style={{ minWidth: 100, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>Count of Devices</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {storeDeviceMap
+                        .filter(store => {
+                          // All filters are case-insensitive substring match
+                          const idMatch = listViewStoreIdFilter.trim() === '' || store.id.toLowerCase().includes(listViewStoreIdFilter.trim().toLowerCase());
+                          const nameMatch = listViewStoreNameFilter.trim() === '' || (store.name && store.name.toLowerCase().includes(listViewStoreNameFilter.trim().toLowerCase()));
+                          const cityMatch = listViewCityFilter.trim() === '' || (store.area && store.area.toLowerCase().includes(listViewCityFilter.trim().toLowerCase()));
+                          const stateMatch = listViewStateFilter.trim() === '' || (store.state && store.state.toLowerCase().includes(listViewStateFilter.trim().toLowerCase()));
+                          return idMatch && nameMatch && cityMatch && stateMatch;
+                        })
+                        .map(store => (
+                          <tr key={store.id}>
+                            <td>{store.id}</td>
+                            <td>{store.name}</td>
+                            <td>{store.area}</td>
+                            <td>{store.state}</td>
+                            <td>{store.deviceCount}</td>
+                            <td className="d-flex gap-2">
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-edit-${store.id}`}>Edit</Tooltip>}
+                              >
+                                <Button variant="outline-primary" size="sm" onClick={() => handleListViewEdit(store)}>
+                                  <i className="bi bi-pencil-square"></i>
+                                </Button>
+                              </OverlayTrigger>
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-delete-${store.id}`}>Delete</Tooltip>}
+                              >
+                                <Button variant="outline-danger" size="sm" onClick={() => handleDeleteStore(store.id)}>
+                                  <i className="bi bi-trash"></i>
+                                </Button>
+                              </OverlayTrigger>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Alert variant="info">
+                  <i className="bi bi-info-circle me-2"></i>
+                  No devices have been assigned to a store yet.
+                </Alert>
+              )}
+            </Tab>
+          </Tabs>
         </Tab>
       </Tabs>
 
@@ -1085,485 +1544,18 @@ function DeviceManagement() {
         </Modal.Footer>
       </Modal>
 
-      {/* Assign to Store Modal - NEW HIERARCHY WITH RADIO BUTTONS */}
-      <Modal show={showAssignModal} onHide={() => setShowAssignModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Assign Device to Store</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            {/* Radio Button Selection for Hierarchy */}
-            <Form.Group className="mb-4">
-              <Form.Label className="fw-bold">Select Hierarchy Level</Form.Label>
-              <div className="d-flex flex-row gap-4">
-                <Form.Check
-                  type="radio"
-                  id="hierarchy-country"
-                  name="hierarchy"
-                  label="Country"
-                  value="country"
-                  checked={selectedHierarchy === 'country'}
-                  onChange={(e) => {
-                    setSelectedHierarchy(e.target.value);
-                    setSelectedCountry('');
-                    setSelectedState('');
-                    setSelectedArea('');
-                    setSelectedStore('');
-                  }}
-                  className="me-3"
-                />
-                <Form.Check
-                  type="radio"
-                  id="hierarchy-state"
-                  name="hierarchy"
-                  label="State"
-                  value="state"
-                  checked={selectedHierarchy === 'state'}
-                  onChange={(e) => {
-                    setSelectedHierarchy(e.target.value);
-                    setSelectedCountry('');
-                    setSelectedState('');
-                    setSelectedArea('');
-                    setSelectedStore('');
-                  }}
-                  className="me-3"
-                />
-                <Form.Check
-                  type="radio"
-                  id="hierarchy-city"
-                  name="hierarchy"
-                  label="City"
-                  value="city"
-                  checked={selectedHierarchy === 'city'}
-                  onChange={(e) => {
-                    setSelectedHierarchy(e.target.value);
-                    setSelectedCountry('');
-                    setSelectedState('');
-                    setSelectedArea('');
-                    setSelectedStore('');
-                  }}
-                />
-              </div>
-            </Form.Group>
 
-            <hr />
 
-            {/* Country Selection */}
-            {selectedHierarchy === 'country' && (
-              <>
-                <Form.Group className="mb-3">
-                  <Form.Label>Select Country</Form.Label>
-                  <Form.Select
-                    value={selectedCountry}
-                    onChange={e => {
-                      setSelectedCountry(e.target.value);
-                      setSelectedState('');
-                      setSelectedArea('');
-                      setSelectedStore('');
-                    }}
-                  >
-                    <option value="">-- Select Country --</option>
-                    {getCountries().map(country => (
-                      <option key={country} value={country}>{country}</option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
 
-                {selectedCountry && (
-                  <>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Select State</Form.Label>
-                      <Form.Select
-                        value={selectedState}
-                        onChange={e => {
-                          setSelectedState(e.target.value);
-                          setSelectedArea('');
-                          setSelectedStore('');
-                        }}
-                      >
-                        <option value="">-- Select State --</option>
-                        {getStates().map(state => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </Form.Select>
-                    </Form.Group>
-
-                    {selectedState && (
-                      <>
-                        <Form.Group className="mb-3">
-                          <Form.Label>Select Area/City</Form.Label>
-                          <Form.Select
-                            value={selectedArea}
-                            onChange={e => {
-                              setSelectedArea(e.target.value);
-                              setSelectedStore('');
-                            }}
-                          >
-                            <option value="">-- Select Area/City --</option>
-                            {getAreas().map(area => (
-                              <option key={area} value={area}>{area}</option>
-                            ))}
-                          </Form.Select>
-                        </Form.Group>
-
-                        {selectedArea && (
-                          <>
-                            <Form.Group className="mb-3">
-                              <Form.Label>Select Store</Form.Label>
-                              <ReactSelect
-                                options={getStores().map(store => ({
-                                  value: store.id,
-                                  label: `${store.name} (${store.id})`
-                                }))}
-                                value={getStores().map(store => ({
-                                  value: store.id,
-                                  label: `${store.name} (${store.id})`
-                                })).find(option => option.value === selectedStore) || null}
-                                onChange={option => setSelectedStore(option ? option.value : '')}
-                                placeholder="Search or select a store..."
-                              isClearable
-                              />
-                            </Form.Group>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* State Selection */}
-            {selectedHierarchy === 'state' && (
-              <>
-                <Form.Group className="mb-3">
-                  <Form.Label>Select State</Form.Label>
-                  <Form.Select
-                    value={selectedState}
-                    onChange={e => {
-                      setSelectedState(e.target.value);
-                      setSelectedArea('');
-                      setSelectedStore('');
-                    }}
-                  >
-                    <option value="">-- Select State --</option>
-                    {[...new Set(storeList.map(s => s.state))].sort((a, b) => a.localeCompare(b)).map(state => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-
-                {selectedState && (
-                  <>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Select Area/City</Form.Label>
-                      <Form.Select
-                        value={selectedArea}
-                        onChange={e => {
-                          setSelectedArea(e.target.value);
-                          setSelectedStore('');
-                        }}
-                      >
-                        <option value="">-- Select Area/City --</option>
-                        {[...new Set(storeList.filter(s => s.state === selectedState).map(s => s.area))].sort((a, b) => a.localeCompare(b)).map(area => (
-                          <option key={area} value={area}>{area}</option>
-                        ))}
-                      </Form.Select>
-                    </Form.Group>
-
-                    {selectedArea && (
-                      <>
-                        <Form.Group className="mb-3">
-                          <Form.Label>Select Store</Form.Label>
-                          <ReactSelect
-                            options={storeList.filter(s => s.state === selectedState && s.area === selectedArea).map(store => ({
-                              value: store.id,
-                              label: `${store.name} (${store.id})`
-                            }))}
-                            value={storeList.filter(s => s.state === selectedState && s.area === selectedArea).map(store => ({
-                              value: store.id,
-                              label: `${store.name} (${store.id})`
-                            })).find(option => option.value === selectedStore) || null}
-                            onChange={option => setSelectedStore(option ? option.value : '')}
-                            placeholder="Search or select a store..."
-                            isClearable
-                          />
-                        </Form.Group>
-                      </>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* City/Area Selection */}
-            {selectedHierarchy === 'city' && (
-              <>
-                <Form.Group className="mb-3">
-                  <Form.Label>Select City/Area</Form.Label>
-                  <Form.Select
-                    value={selectedArea}
-                    onChange={e => {
-                      setSelectedArea(e.target.value);
-                      setSelectedStore('');
-                    }}
-                  >
-                    <option value="">-- Select City/Area --</option>
-                    {[...new Set(storeList.map(s => s.area))].sort((a, b) => a.localeCompare(b)).map(area => (
-                      <option key={area} value={area}>{area}</option>
-                    ))}
-                  </Form.Select>
-                  <Form.Text className="text-muted">
-                    You can type to search for a city/area
-                  </Form.Text>
-                </Form.Group>
-
-                {selectedArea && (
-                  <>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Select Store in {selectedArea}</Form.Label>
-                      <ReactSelect
-                        options={storeList.filter(s => s.area === selectedArea).map(store => ({
-                          value: store.id,
-                          label: `${store.name} (${store.id})`
-                        }))}
-                        value={storeList.filter(s => s.area === selectedArea).map(store => ({
-                          value: store.id,
-                          label: `${store.name} (${store.id})`
-                        })).find(option => option.value === selectedStore) || null}
-                        onChange={option => setSelectedStore(option ? option.value : '')}
-                        placeholder="Search or select a store..."
-                        isClearable
-                      />
-                    </Form.Group>
-                  </>
-                )}
-              </>
-            )}
-            
-            {/* Manual Store ID Entry */}
-            <Form.Group className="mb-3" style={{ position: 'relative' }}>
-              <Form.Label>Or enter Store IDs (comma separated)</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="e.g. INAPAML00004, INAPAML00008"
-                value={manualStoreIds}
-                autoComplete="off"
-                onChange={handleManualStoreIdChange}
-                onFocus={() => { if (storeIdSuggestions.length > 0) setShowSuggestions(true); }}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              />
-              {showSuggestions && storeIdSuggestions.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  zIndex: 10,
-                  background: 'white',
-                  border: '1px solid #ccc',
-                  width: '100%',
-                  maxHeight: 180,
-                  overflowY: 'auto',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                }}>
-                  {storeIdSuggestions.map(suggestion => (
-                    <div
-                      key={suggestion}
-                      style={{ padding: '6px 12px', cursor: 'pointer' }}
-                      onMouseDown={() => handleSuggestionClick(suggestion)}
-                    >
-                      {suggestion}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {storeIdError && <Form.Text className="text-danger">{storeIdError}</Form.Text>}
-              <Form.Text className="text-muted">
-                Enter one or more store IDs, separated by commas. Start typing (e.g. INAP) to see suggestions.
-              </Form.Text>
-            </Form.Group>
-              <hr />
-            {/* Device Dropdown and Add Button */}
-            {(selectedStore || manualStoreIds) && (
-              <Row>
-                <Col md={8}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Select Device to Assign</Form.Label>
-                    <Form.Select
-                      value={selectedAssignDeviceId}
-                      onChange={e => setSelectedAssignDeviceId(e.target.value)}
-                    >
-                      <option value="">-- Select Device --</option>
-                      {devices.map(device => (
-                        <option key={device.id} value={device.id}>
-                          {device.name} ({device.id})
-                        </option>
-                      ))}
-                    </Form.Select>
-                  </Form.Group>
-                  {selectedAssignDeviceId && (
-                  <Form.Group className="mb-3">
-                    <Form.Label>Enter MAC Address</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="e.g., 00:1B:44:11:3A:B7"
-                      value={stagedMacAddress}
-                      onChange={(e) => setStagedMacAddress(e.target.value)}
-                    />
-                  </Form.Group>
-                  )}
-                </Col>
-                <Col md={4} className="d-flex align-items-end mb-3">
-                  <Button variant="outline-primary" onClick={handleStageAssignment} className="w-100">
-                    <i className="bi bi-plus-circle me-2"></i>
-                    Add
-                  </Button>
-                </Col>
-              </Row>
-            )}
-
-            {/* Staged Assignments Table */}
-            {stagedAssignments.length > 0 && (
-              <div className="mt-4">
-                <h5>Staged Assignments</h5>
-                <div className="table-responsive">
-                  <table className="table table-striped">
-                    <thead>
-                      <tr>
-                        <th>Device Name</th>
-                        <th>MAC Address</th>
-                        <th>Store ID</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stagedAssignments.map(assignment => (
-                        <tr key={assignment.tempId}>
-                          <td>{assignment.deviceName}</td>
-                          <td>{assignment.macAddress}</td>
-                          <td>{assignment.storeId}</td>
-                          <td>
-                            <Button variant="danger" size="sm" onClick={() => handleRemoveStagedAssignment(assignment.tempId)}>
-                              <i className="bi bi-trash"></i>
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowAssignModal(false)}>
-            Cancel
+      {/* Edit Store Modal removed */}
+      {/* Save Changes button for Assign tab (inline form) */}
+      {activeTab === 'assign' && activeSubTab === 'assign' && selectedStoreForAssignment && showInlineAssignForm && assignTabEditMode && (
+        <div className="d-flex justify-content-end mb-3">
+          <Button variant="success" onClick={handleAssignTabSaveChanges}>
+            <i className="bi bi-save me-2"></i>Save Changes
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleAssignToStore}
-            disabled={stagedAssignments.length === 0}
-          >
-            <i className="bi bi-link-45deg me-2"></i>
-            Assign to Store
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-
-
-      {/* Edit Store Modal */}
-      <Modal show={showEditStoreModal} onHide={() => setShowEditStoreModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Edit Store: {editingStore?.id}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <h5>Devices in this Store</h5>
-          <div className="table-responsive mb-4">
-            <table className="table table-bordered">
-              <thead className="table-light">
-                <tr>
-                  <th>Device Name</th>
-                  <th>Device ID</th>
-                  <th>MAC Address</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {editableDevices.map(device => (
-                  <tr key={device.assignmentId}>
-                    <td>{device.name}</td>
-                    <td>{device.isNew ? <Badge bg="success">New</Badge> : device.id}</td>
-                    <td>{device.macAddress}</td>
-                    <td>
-                      <Badge bg={device.active ? 'success' : 'danger'}>
-                        {device.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td className="d-flex align-items-center">
-                      <Form.Check
-                        type="switch"
-                        id={`switch-${device.assignmentId}`}
-                        checked={device.active}
-                        onChange={() => handleDeviceStatusToggle(device.assignmentId)}
-                        label={device.active ? 'Deactivate' : 'Activate'}
-                      />
-                      <Button variant="outline-danger" size="sm" className="ms-3" onClick={() => handleRemoveDeviceFromStore(device.assignmentId)}>
-                        <i className="bi bi-trash"></i>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <hr />
-
-          <h5>Add Device to Store</h5>
-          <Row>
-            <Col md={8}>
-              <Form.Group>
-                <Form.Label>Select Device to Add</Form.Label>
-                <Form.Select
-                  value={deviceToAdd}
-                  onChange={e => setDeviceToAdd(e.target.value)}
-                >
-                  <option value="">-- Select a device --</option>
-                  {devices.map(device => (
-                      <option key={device.id} value={device.id}>{device.name} ({device.id})</option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-              {deviceToAdd && (
-              <Form.Group className="mb-3">
-                <Form.Label>Enter MAC Address</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="e.g., 00:1B:44:11:3A:B7"
-                  value={deviceToAddMac}
-                  onChange={(e) => setDeviceToAddMac(e.target.value)}
-                />
-              </Form.Group>
-              )}
-            </Col>
-            <Col md={4} className="d-flex align-items-end">
-              <Button onClick={handleAddDeviceToStore} variant="primary" className="w-100">
-                <i className="bi bi-plus-circle me-2"></i>
-                Add Device
-              </Button>
-            </Col>
-          </Row>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEditStoreModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleSaveChanges}>
-            Save Changes
-          </Button>
-        </Modal.Footer>
-      </Modal>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
