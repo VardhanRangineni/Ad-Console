@@ -33,21 +33,30 @@ function ContentLibrary() {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Load device resolutions (mock or from localStorage)
+  // Load device resolutions from actual devices in localStorage
   useEffect(() => {
-    // Example: [{ width: 1920, height: 1080 }, { width: 1080, height: 1920 }]
-    let resolutions = [];
-    const stored = localStorage.getItem('deviceResolutions');
+    let devices = [];
+    const stored = localStorage.getItem('devices');
     if (stored) {
-      resolutions = JSON.parse(stored);
-    } else {
-      // Mock some resolutions if not present
-      resolutions = [
-        { width: 1920, height: 1080 },
-        { width: 1080, height: 1920 },
-        { width: 1280, height: 720 },
-        { width: 720, height: 1280 }
-      ];
+      try {
+        devices = JSON.parse(stored);
+      } catch {
+        devices = [];
+      }
+    }
+    // Extract unique resolutions from device.resolution.width/height
+    const seen = new Set();
+    const resolutions = [];
+    for (const d of devices) {
+      if (d.resolution && typeof d.resolution.width === 'number' && typeof d.resolution.height === 'number') {
+        const width = d.resolution.width;
+        const height = d.resolution.height;
+        const key = `${width}x${height}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          resolutions.push({ width, height });
+        }
+      }
     }
     setDeviceResolutions({
       landscape: resolutions.filter(r => r.width > r.height),
@@ -407,6 +416,7 @@ function ContentLibrary() {
                           <th>Type</th>
                           <th>Width</th>
                           <th>Height</th>
+                          <th>Orientation</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -416,6 +426,7 @@ function ContentLibrary() {
                             <td>{m.type}</td>
                             <td>{m.width}</td>
                             <td>{m.height}</td>
+                            <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -470,6 +481,7 @@ function ContentLibrary() {
                       <th>Type</th>
                       <th>Width</th>
                       <th>Height</th>
+                      <th>Orientation</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -479,16 +491,24 @@ function ContentLibrary() {
                         <td>{m.type}</td>
                         <td>{m.width}</td>
                         <td>{m.height}</td>
+                        <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </Table>
               </div>
             )}
-            <Alert variant="info">
-              <div><b>Available Landscape Sizes:</b> {deviceResolutions.landscape.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
-              <div><b>Available Portrait Sizes:</b> {deviceResolutions.portrait.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
-            </Alert>
+            {deviceResolutions.landscape.length === 0 && deviceResolutions.portrait.length === 0 ? (
+              <Alert variant="warning">
+                No device resolutions found.{' '}
+                <a href="/devices" style={{ textDecoration: 'underline', cursor: 'pointer' }}>Add a device</a> to show available resolutions.
+              </Alert>
+            ) : (
+              <Alert variant="info">
+                <div><b>Available Landscape Sizes:</b> {deviceResolutions.landscape.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
+                <div><b>Available Portrait Sizes:</b> {deviceResolutions.portrait.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
+              </Alert>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>
