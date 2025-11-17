@@ -38,7 +38,7 @@ function Navbar() {
               active={location.pathname === '/assign'}
             >
               <i className="bi bi-plus-circle me-1"></i>
-              Assign Content
+              Playlists
             </Nav.Link>
             <Nav.Link 
               as={Link} 

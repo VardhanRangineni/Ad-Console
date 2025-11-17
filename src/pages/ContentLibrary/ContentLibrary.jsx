@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert } from 'react-bootstrap';
+import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
+import { getAllDevices } from '../../services/deviceIndexeddb';
 
 function ContentLibrary() {
   const [contentList, setContentList] = useState([]);
@@ -18,13 +20,14 @@ function ContentLibrary() {
   const [editMediaResolutions, setEditMediaResolutions] = useState([]);
   const [disableConfirmId, setDisableConfirmId] = useState(null);
   const [showDisableModal, setShowDisableModal] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [previewAnchor, setPreviewAnchor] = useState(null);
 
   useEffect(() => {
-    const loadContent = () => {
-      const stored = localStorage.getItem('customContent');
-      const customContent = stored ? JSON.parse(stored) : [];
-      setContentList(customContent);
-    };
+    async function loadContent() {
+      const all = await getAllContent();
+      setContentList(all);
+    }
     loadContent();
     const handleStorageChange = (e) => {
       if (e.key === 'customContent') loadContent();
@@ -34,34 +37,38 @@ function ContentLibrary() {
   }, []);
 
   // Load device resolutions from actual devices in localStorage
+  
   useEffect(() => {
-    let devices = [];
-    const stored = localStorage.getItem('devices');
-    if (stored) {
-      try {
-        devices = JSON.parse(stored);
-      } catch {
-        devices = [];
-      }
-    }
-    // Extract unique resolutions from device.resolution.width/height
-    const seen = new Set();
-    const resolutions = [];
-    for (const d of devices) {
-      if (d.resolution && typeof d.resolution.width === 'number' && typeof d.resolution.height === 'number') {
-        const width = d.resolution.width;
-        const height = d.resolution.height;
-        const key = `${width}x${height}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          resolutions.push({ width, height });
+    async function loadDeviceResolutions() {
+      const devices = await getAllDevices();
+      let landscape = [];
+      let portrait = [];
+      for (const d of devices) {
+        if (d.resolution && typeof d.resolution.width === 'number' && typeof d.resolution.height === 'number') {
+          const width = d.resolution.width;
+          const height = d.resolution.height;
+          if (d.orientation === 'landscape' || d.orientation === 'horizontal') {
+            if (!landscape.some(r => r.width === width && r.height === height)) {
+              landscape.push({ width, height });
+            }
+          } else if (d.orientation === 'portrait' || d.orientation === 'vertical') {
+            if (!portrait.some(r => r.width === width && r.height === height)) {
+              portrait.push({ width, height });
+            }
+          } else if (d.orientation === 'both') {
+            // For 'both', add to landscape and add swapped to portrait
+            if (!landscape.some(r => r.width === width && r.height === height)) {
+              landscape.push({ width, height });
+            }
+            if (!portrait.some(r => r.width === height && r.height === width)) {
+              portrait.push({ width: height, height: width });
+            }
+          }
         }
       }
+      setDeviceResolutions({ landscape, portrait });
     }
-    setDeviceResolutions({
-      landscape: resolutions.filter(r => r.width > r.height),
-      portrait: resolutions.filter(r => r.height > r.width)
-    });
+    loadDeviceResolutions();
   }, []);
 
   // Soft delete (disable, no re-enable)
@@ -69,20 +76,17 @@ function ContentLibrary() {
     setDisableConfirmId(content.id);
     setShowDisableModal(true);
   };
-  const handleConfirmDisable = () => {
-    const stored = localStorage.getItem('customContent');
-    let customContent = stored ? JSON.parse(stored) : [];
-    customContent = customContent.map(c =>
-      c.id === disableConfirmId ? { ...c, active: false, permanentlyDisabled: true } : c
-    );
-    localStorage.setItem('customContent', JSON.stringify(customContent));
-    setContentList(customContent);
+  const handleConfirmDisable = async () => {
+    // Find the content to disable
+    const content = contentList.find(c => c.id === disableConfirmId);
+    if (content) {
+      const updated = { ...content, active: false, permanentlyDisabled: true };
+      await updateContent(updated);
+      const all = await getAllContent();
+      setContentList(all);
+    }
     setShowDisableModal(false);
     setDisableConfirmId(null);
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'customContent',
-      newValue: JSON.stringify(customContent)
-    }));
   };
   const handleCancelDisable = () => {
     setShowDisableModal(false);
@@ -110,8 +114,23 @@ function ContentLibrary() {
     setEditNewFiles(files);
   };
 
-  const handleEditSaveFiles = () => {
+  const handleEditSaveFiles = async () => {
     if (!editContent || editNewFiles.length === 0) return;
+    // Validation: check if all images match available device resolutions
+    if (editMediaResolutions.length > 0 && deviceResolutions) {
+      const allDeviceSizes = [
+        ...deviceResolutions.landscape,
+        ...deviceResolutions.portrait
+      ];
+      const unmatched = editMediaResolutions.filter(m => {
+        if (m.type !== 'image') return false; // Only validate images
+        return !allDeviceSizes.some(d => d.width === m.width && d.height === m.height);
+      });
+      if (unmatched.length > 0) {
+        setEditError('One or more images do not match any available device resolution. Please upload images with the correct size.');
+        return;
+      }
+    }
     const safeRead = (file, type) => {
       return new Promise(resolve => {
         const reader = new FileReader();
@@ -126,31 +145,20 @@ function ContentLibrary() {
     const videos = editNewFiles.filter(f => f.type.startsWith('video/'));
     const imagePromises = images.map(file => safeRead(file, 'image'));
     const videoPromises = videos.map(file => safeRead(file, 'video'));
-    Promise.all([...imagePromises, ...videoPromises]).then(mediaArr => {
-      const validMedia = mediaArr.filter(Boolean);
-      if (validMedia.length === 0) {
-        setEditError('Failed to read files.');
-        return;
-      }
-      // Update content in localStorage
-      const stored = localStorage.getItem('customContent');
-      let customContent = stored ? JSON.parse(stored) : [];
-      customContent = customContent.map(c =>
-        c.id === editContent.id
-          ? { ...c, slides: [...(c.slides || []), ...validMedia] }
-          : c
-      );
-      localStorage.setItem('customContent', JSON.stringify(customContent));
-      setContentList(customContent);
-      // Update editContent in modal
-      setEditContent({ ...editContent, slides: [...(editContent.slides || []), ...validMedia] });
-      setEditNewFiles([]);
-      setEditError('');
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'customContent',
-        newValue: JSON.stringify(customContent)
-      }));
-    });
+    const mediaArr = await Promise.all([...imagePromises, ...videoPromises]);
+    const validMedia = mediaArr.filter(Boolean);
+    if (validMedia.length === 0) {
+      setEditError('Failed to read files.');
+      return;
+    }
+    // Update content in IndexedDB
+    const updated = { ...editContent, slides: [...(editContent.slides || []), ...validMedia] };
+    await updateContent(updated);
+    setEditContent(updated);
+    setEditNewFiles([]);
+    setEditError('');
+    const all = await getAllContent();
+    setContentList(all);
   };
 
   // Extract resolution for each selected image/video
@@ -163,8 +171,8 @@ function ContentLibrary() {
           reader.onload = e => {
             if (file.type.startsWith('image/')) {
               const img = new window.Image();
-              img.onload = () => resolve({ name: file.name, type: 'image', width: img.width, height: img.height });
-              img.onerror = () => resolve({ name: file.name, type: 'image', width: '-', height: '-' });
+              img.onload = () => resolve({ name: file.name, type: 'image', width: img.width, height: img.height, dataUrl: e.target.result });
+              img.onerror = () => resolve({ name: file.name, type: 'image', width: '-', height: '-', dataUrl: e.target.result });
               img.src = e.target.result;
             } else if (file.type.startsWith('video/')) {
               const video = document.createElement('video');
@@ -245,7 +253,7 @@ function ContentLibrary() {
     setNewImages(images);
     setNewVideos(videos);
   };
-  const handleAddContent = () => {
+  const handleAddContent = async () => {
     if (newContentName.trim() === '') {
       setAddError('Content name is required.');
       return;
@@ -254,50 +262,52 @@ function ContentLibrary() {
       setAddError('At least one image or video is required.');
       return;
     }
+    // Validation: check if all images match available device resolutions
+    if (mediaResolutions.length > 0 && deviceResolutions) {
+      const allDeviceSizes = [
+        ...deviceResolutions.landscape,
+        ...deviceResolutions.portrait
+      ];
+      const unmatched = mediaResolutions.filter(m => {
+        if (m.type !== 'image') return false; // Only validate images
+        return !allDeviceSizes.some(d => d.width === m.width && d.height === m.height);
+      });
+      if (unmatched.length > 0) {
+        setAddError('One or more images do not match any available device resolution. Please upload images with the correct size.');
+        return;
+      }
+    }
     setAddError('');
+    // Prepare content object with images as dataUrl
     const id = Date.now();
+    const slides = await Promise.all([
+      ...newImages.map(file => new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve({ type: 'image', name: file.name, data: reader.result });
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      })),
+      ...newVideos.map(file => new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve({ type: 'video', name: file.name, data: reader.result });
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      }))
+    ]);
     const newContent = {
       id,
       title: newContentName,
       active: true,
-      slides: []
+      slides: slides.filter(Boolean)
     };
-    const safeRead = (file, type) => {
-      return new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(type === 'image'
-          ? { type: 'image', data: reader.result }
-          : { type: 'video', data: reader.result, name: file.name });
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
-      });
-    };
-    const imagePromises = newImages.map(file => safeRead(file, 'image'));
-    const videoPromises = newVideos.map(file => safeRead(file, 'video'));
-    Promise.all([...imagePromises, ...videoPromises]).then(mediaArr => {
-      const validMedia = mediaArr.filter(Boolean);
-      if (validMedia.length === 0) {
-        setAddError('Failed to read files.');
-        return;
-      }
-      newContent.slides = validMedia;
-      // Save to localStorage
-      const stored = localStorage.getItem('customContent');
-      let customContent = stored ? JSON.parse(stored) : [];
-      customContent.push(newContent);
-      localStorage.setItem('customContent', JSON.stringify(customContent));
-      setContentList(customContent);
-      // Close modal
-      setShowAddModal(false);
-      setNewContentName('');
-      setNewImages([]);
-      setNewVideos([]);
-      setAddError('');
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'customContent',
-        newValue: JSON.stringify(customContent)
-      }));
-    });
+    await addContent(newContent);
+    const all = await getAllContent();
+    setContentList(all);
+    setShowAddModal(false);
+    setNewContentName('');
+    setNewImages([]);
+    setNewVideos([]);
+    setAddError('');
   };
 
   return (
@@ -487,7 +497,18 @@ function ContentLibrary() {
                   <tbody>
                     {mediaResolutions.map((m, i) => (
                       <tr key={i}>
-                        <td>{m.name}</td>
+                        <td>
+                          {m.type === 'image' && m.dataUrl ? (
+                            <span
+                              style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                              onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl })}
+                              onMouseLeave={() => setPreviewAnchor(null)}
+                              onClick={() => setPreviewImage(m.dataUrl)}
+                            >
+                              {m.name}
+                            </span>
+                          ) : m.name}
+                        </td>
                         <td>{m.type}</td>
                         <td>{m.width}</td>
                         <td>{m.height}</td>
@@ -533,6 +554,29 @@ function ContentLibrary() {
           <Button variant="secondary" onClick={handleCancelDisable}>Cancel</Button>
           <Button variant="danger" onClick={handleConfirmDisable}>Disable</Button>
         </Modal.Footer>
+      </Modal>
+      {/* Thumbnail preview on hover */}
+      {previewAnchor && (
+        <div
+          style={{
+            position: 'fixed',
+            left: previewAnchor.x + 10,
+            top: previewAnchor.y + 10,
+            background: '#fff',
+            border: '1px solid #ccc',
+            padding: 2,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 2000
+          }}
+        >
+          <img src={previewAnchor.url} alt="preview" style={{ maxWidth: 120, maxHeight: 80 }} />
+        </div>
+      )}
+      {/* Full image modal on click */}
+      <Modal show={!!previewImage} onHide={() => setPreviewImage(null)} centered size="lg">
+        <Modal.Body style={{ textAlign: 'center', background: '#222' }}>
+          {previewImage && <img src={previewImage} alt="preview" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />}
+        </Modal.Body>
       </Modal>
     </>
   );

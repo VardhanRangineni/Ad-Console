@@ -1,11 +1,14 @@
+import { getAllAssignments, addAssignment, deleteAssignment, bulkAddAssignments } from '../../services/deviceIndexeddb';
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 import * as XLSX from 'xlsx';
-import { useApp } from '../../context/AppContext';
+// import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
+// import { getAllContent } from '../../services/indexeddb';
+import { getAllDevices, addDevice, updateDevice, deleteDeviceById } from '../../services/deviceIndexeddb';
 
 function DeviceManagement() {
     // MAC address for config modal
@@ -59,22 +62,16 @@ function DeviceManagement() {
   // Validate manual store IDs (must match a store in storeList)
 
   // Context and device lists must come first
-  const { devices = [], loadDevices, deleteDevice } = useApp();
+  const [devices, setDevices] = React.useState([]);
 
-  // Load assignments from localStorage on mount
-  useEffect(() => {
-    const handleStorageChange = (event) => {
-      if (event.key === 'deviceAssignments') {
-        setAssignments(event.newValue ? JSON.parse(event.newValue) : []);
+  // Load devices from IndexedDB on mount
+    useEffect(() => {
+      async function loadDevicesFromDB() {
+        const all = await getAllDevices();
+        setDevices(all);
       }
-    };
-    
-    const assignmentsStr = localStorage.getItem('deviceAssignments');
-    setAssignments(assignmentsStr ? JSON.parse(assignmentsStr) : []);
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+      loadDevicesFromDB();
+    }, []);
 
   // Re-calculate the store-to-device mapping whenever assignments or device models change
   useEffect(() => {
@@ -153,6 +150,39 @@ function DeviceManagement() {
   const [configResolutionWidth, setConfigResolutionWidth] = React.useState('1920');
   const [configResolutionHeight, setConfigResolutionHeight] = React.useState('1080');
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
+  // Modal for disable warning and confirmation
+  const [showDisableWarning, setShowDisableWarning] = React.useState(false);
+  const [disableWarningStores, setDisableWarningStores] = React.useState([]);
+  const [showDisableConfirm, setShowDisableConfirm] = React.useState(false);
+  const [pendingDisableDeviceId, setPendingDisableDeviceId] = React.useState(null);
+  // Track disabled devices (array of device IDs)
+  const [disabledDevices, setDisabledDevices] = React.useState(() => {
+    const saved = localStorage.getItem('disabledDevices');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Disable device handler
+  const handleToggleDisableDevice = (deviceId) => {
+    if (disabledDevices.includes(deviceId)) return;
+    const assignedStores = assignments.filter(a => a.deviceId === deviceId).map(a => a.storeName || a.storeId);
+    if (assignedStores.length > 0) {
+      setDisableWarningStores(assignedStores);
+      setShowDisableWarning(true);
+      return;
+    }
+    setPendingDisableDeviceId(deviceId);
+    setShowDisableConfirm(true);
+  };
+
+  const confirmDisableDevice = () => {
+    if (pendingDisableDeviceId) {
+      const updated = [...disabledDevices, pendingDisableDeviceId];
+      setDisabledDevices(updated);
+      localStorage.setItem('disabledDevices', JSON.stringify(updated));
+    }
+    setShowDisableConfirm(false);
+    setPendingDisableDeviceId(null);
+  };
 
   const storeOptions = useMemo(() => storeList.map(store => ({
     value: store.id,
@@ -187,13 +217,11 @@ function DeviceManagement() {
   };
 
   // Add Device handler
-  const handleAddDevice = () => {
+  const handleAddDevice = async () => {
     if (!newDeviceName.trim()) {
       alert('Please enter device name');
       return;
     }
-    const devicesStr = localStorage.getItem('devices');
-    const devicesList = devicesStr ? JSON.parse(devicesStr) : [];
     const newDevice = {
       id: Date.now().toString(),
       name: newDeviceName,
@@ -203,19 +231,15 @@ function DeviceManagement() {
         height: parseInt(newDeviceResolutionHeight)
       }
     };
-    devicesList.push(newDevice);
-    localStorage.setItem('devices', JSON.stringify(devicesList));
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'devices',
-      newValue: JSON.stringify(devicesList)
-    }));
+    await addDevice(newDevice);
+    const all = await getAllDevices();
+    setDevices(all);
     setShowAddModal(false);
     setIsClone(false);
     setNewDeviceName('');
     setNewDeviceOrientation('both');
     setNewDeviceResolutionWidth('1920');
     setNewDeviceResolutionHeight('1080');
-    loadDevices && loadDevices();
   };
 
   const openConfigModal = (device) => {
@@ -257,49 +281,33 @@ function DeviceManagement() {
     }
   };
 
-  const handleSaveConfiguration = () => {
+  const handleSaveConfiguration = async () => {
     if (!configName.trim()) {
       alert('Please enter device name');
       return;
     }
-
-    const devicesStr = localStorage.getItem('devices');
-    const devicesList = devicesStr ? JSON.parse(devicesStr) : [];
-    
-    const updatedDevices = devicesList.map(d => 
-      d.id === configDevice.id 
-        ? {
-            ...d,
-            name: configName,
-            orientation: configOrientation,
-            resolution: {
-              width: parseInt(configResolutionWidth),
-              height: parseInt(configResolutionHeight)
-            }
-          }
-        : d
-    );
-    
-    localStorage.setItem('devices', JSON.stringify(updatedDevices));
-    
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'devices',
-      newValue: JSON.stringify(updatedDevices)
-    }));
-
+    const updatedDevice = {
+      ...configDevice,
+      name: configName,
+      orientation: configOrientation,
+      resolution: {
+        width: parseInt(configResolutionWidth),
+        height: parseInt(configResolutionHeight)
+      }
+    };
+    await updateDevice(updatedDevice);
+    const all = await getAllDevices();
+    setDevices(all);
     setShowConfigModal(false);
     setConfigDevice(null);
-    window.location.reload();
   };
 
-  const confirmDeleteDevice = (device) => {
-    setDeleteDeviceState(device);
-    setShowDeleteModal(true);
-  };
 
-  const handleDeleteDevice = () => {
+  const handleDeleteDevice = async () => {
     if (deleteDeviceState) {
-      deleteDevice(deleteDeviceState.id);
+      await deleteDeviceById(deleteDeviceState.id);
+      const all = await getAllDevices();
+      setDevices(all);
       setShowDeleteModal(false);
       setDeleteDeviceState(null);
     }
@@ -307,7 +315,7 @@ function DeviceManagement() {
 
   // Removed unused: openAssignModal, handleStageAssignment, handleRemoveStagedAssignment, handleAssignToStore
 
-  const handleAssignNewDevice = () => {
+  const handleAssignNewDevice = async () => {
     if (!selectedStoreForAssignment || !deviceToAssign || !macAddressToAssign || !orientationToAssign) {
       alert('Please fill all fields.');
       return;
@@ -317,9 +325,6 @@ function DeviceManagement() {
       return;
     }
 
-    const assignmentsStr = localStorage.getItem('deviceAssignments');
-    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-
     const newAssignment = {
       assignmentId: `${Date.now()}-new`,
       deviceId: deviceToAssign,
@@ -328,32 +333,26 @@ function DeviceManagement() {
       orientation: orientationToAssign,
       active: true,
     };
-
-    const updatedAssignments = [...allAssignments, newAssignment];
-    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'deviceAssignments',
-      newValue: JSON.stringify(updatedAssignments)
-    }));
-
+    await addAssignment(newAssignment);
+    const allAssignments = await getAllAssignments();
+    setAssignments(allAssignments);
     // Reset form
     setDeviceToAssign(null);
     setMacAddressToAssign('');
     setOrientationToAssign('');
   };
 
-  const handleDeleteStore = (storeId) => {
+  const handleDeleteStore = async (storeId) => {
     if (window.confirm(`Are you sure you want to delete all assignments for store ${storeId}?`)) {
-        const assignmentsStr = localStorage.getItem('deviceAssignments');
-        let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-        const updatedAssignments = allAssignments.filter(a => a.storeId !== storeId);
-        localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: 'deviceAssignments',
-            newValue: JSON.stringify(updatedAssignments)
-        }));
+      const allAssignments = await getAllAssignments();
+      const toDelete = allAssignments.filter(a => a.storeId === storeId);
+      for (const a of toDelete) {
+        await deleteAssignment(a.assignmentId);
+      }
+      const updatedAssignments = await getAllAssignments();
+      setAssignments(updatedAssignments);
     }
-};
+  };
 
   // Clone device handler (must be outside JSX)
   const handleCloneDevice = (device) => {
@@ -410,15 +409,12 @@ function DeviceManagement() {
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const data = new Uint8Array(event.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const json = XLSX.utils.sheet_to_json(worksheet);
-
-      const assignmentsStr = localStorage.getItem('deviceAssignments');
-      let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
 
       const newAssignments = json.map((row, index) => {
         const deviceName = row['Device'] ? String(row['Device']).trim() : '';
@@ -461,14 +457,9 @@ function DeviceManagement() {
 
       const assignmentsToSave = validAssignments.map(({ originalRow, ...rest }) => rest);
 
-      const updatedAssignments = [...allAssignments, ...assignmentsToSave];
-      
-      localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-      
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'deviceAssignments',
-        newValue: JSON.stringify(updatedAssignments)
-      }));
+      await bulkAddAssignments(assignmentsToSave);
+      const allAssignments = await getAllAssignments();
+      setAssignments(allAssignments);
 
       // Clear the file input
       if (fileInputRef.current) {
@@ -478,30 +469,27 @@ function DeviceManagement() {
     reader.readAsArrayBuffer(file);
   };
 
-  // Save Changes in Assign tab (writes to localStorage, returns to List View)
-  const handleAssignTabSaveChanges = () => {
+  // Save Changes in Assign tab (writes to IndexedDB, returns to List View)
+  const handleAssignTabSaveChanges = async () => {
     if (!selectedStoreForAssignment) return;
-    const assignmentsStr = localStorage.getItem('deviceAssignments');
-    let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
     // Remove all assignments for this store
-    const otherAssignments = allAssignments.filter(a => a.storeId !== selectedStoreForAssignment.value);
+    const allAssignments = await getAllAssignments();
+    const toDelete = allAssignments.filter(a => a.storeId === selectedStoreForAssignment.value);
+    for (const a of toDelete) {
+      await deleteAssignment(a.assignmentId);
+    }
     // Add updated assignments
-    const updatedAssignments = [
-      ...otherAssignments,
-      ...assignTabAssignments.map(d => ({
-        assignmentId: d.assignmentId,
-        deviceId: d.id,
-        storeId: selectedStoreForAssignment.value,
-        macAddress: d.macAddress,
-        orientation: d.orientation,
-        active: d.active,
-      }))
-    ];
-    localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'deviceAssignments',
-      newValue: JSON.stringify(updatedAssignments)
+    const newAssignments = assignTabAssignments.map(d => ({
+      assignmentId: d.assignmentId,
+      deviceId: d.id,
+      storeId: selectedStoreForAssignment.value,
+      macAddress: d.macAddress,
+      orientation: d.orientation,
+      active: d.active,
     }));
+    await bulkAddAssignments(newAssignments);
+    const updatedAssignments = await getAllAssignments();
+    setAssignments(updatedAssignments);
     // Return to List View
     setActiveSubTab('listView');
     setSelectedStoreForAssignment(null);
@@ -570,6 +558,7 @@ function DeviceManagement() {
                 </thead>
                 <tbody>
                   {devices.map(device => {
+                    const isDisabled = disabledDevices.includes(device.id);
                     return (
                       <tr key={device.id}>
                         <td>{device.id}</td>
@@ -577,44 +566,44 @@ function DeviceManagement() {
                         <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
                         <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}</td>
                         <td>
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
-                          >
-                            <Button 
-                              variant="primary" 
-                              size="sm"
-                              className="me-2"
-                              onClick={() => openConfigModal(device)}
+                          {/* Disable/Enable Toggle Switch */}
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            <Form.Check
+                              type="switch"
+                              id={`disable-switch-${device.id}`}
+                              checked={isDisabled}
+                              onChange={() => handleToggleDisableDevice(device.id)}
+                              disabled={isDisabled}
+                              label={isDisabled ? 'Disabled' : 'Enabled'}
+                              style={{ marginBottom: 0, marginRight: 8 }}
+                            />
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
                             >
-                              <i className="bi bi-gear"></i>
-                            </Button>
-                          </OverlayTrigger>
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
-                          >
-                            <Button 
-                              variant="secondary" 
-                              size="sm"
-                              className="me-2"
-                              onClick={() => handleCloneDevice(device)}
+                              <Button 
+                                variant="primary" 
+                                size="sm"
+                                className="me-2"
+                                onClick={() => openConfigModal(device)}
+                              >
+                                <i className="bi bi-gear"></i>
+                              </Button>
+                            </OverlayTrigger>
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
                             >
-                              <i className="bi bi-files"></i>
-                            </Button>
-                          </OverlayTrigger>
-                          <OverlayTrigger
-                            placement="top"
-                            overlay={<Tooltip id={`tooltip-delete-${device.id}`}>Delete</Tooltip>}
-                          >
-                            <Button 
-                              variant="danger" 
-                              size="sm"
-                              onClick={() => confirmDeleteDevice(device)}
-                            >
-                              <i className="bi bi-trash"></i>
-                            </Button>
-                          </OverlayTrigger>
+                              <Button 
+                                variant="secondary" 
+                                size="sm"
+                                className="me-2"
+                                onClick={() => handleCloneDevice(device)}
+                              >
+                                <i className="bi bi-files"></i>
+                              </Button>
+                            </OverlayTrigger>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -783,30 +772,7 @@ function DeviceManagement() {
                             </Col>
                           </Row>
                           <div className="d-flex justify-content-end mt-3">
-                            <Button variant="primary" onClick={() => {
-                              // Save assignTabAssignments to localStorage for this store
-                              const assignmentsStr = localStorage.getItem('deviceAssignments');
-                              let allAssignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-                              // Remove assignments for this store
-                              allAssignments = allAssignments.filter(a => a.storeId !== selectedStoreForAssignment.value);
-                              // Add back the edited assignments
-                              const newAssignments = assignTabAssignments.map(d => ({
-                                assignmentId: d.assignmentId,
-                                deviceId: d.id,
-                                storeId: selectedStoreForAssignment.value,
-                                macAddress: d.macAddress,
-                                orientation: d.orientation,
-                                active: d.active
-                              }));
-                              const updatedAssignments = [...allAssignments, ...newAssignments];
-                              localStorage.setItem('deviceAssignments', JSON.stringify(updatedAssignments));
-                              window.dispatchEvent(new StorageEvent('storage', {
-                                key: 'deviceAssignments',
-                                newValue: JSON.stringify(updatedAssignments)
-                              }));
-                              setActiveTab('assign');
-                              setActiveSubTab('listView');
-                            }}>
+                            <Button variant="primary" onClick={handleAssignTabSaveChanges}>
                               <i className="bi bi-save me-2"></i>
                               Save Changes
                             </Button>
@@ -1529,6 +1495,51 @@ function DeviceManagement() {
           }
         `}
       </style>
+    {/* Disable Warning Modal */}
+    <Modal show={showDisableWarning} onHide={() => setShowDisableWarning(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Cannot Disable Device</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="text-center py-3">
+          <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
+          <p className="mt-3 mb-0">This device is assigned to the following store(s):</p>
+          <ul className="list-unstyled fw-bold">
+            {disableWarningStores.map((store, idx) => (
+              <li key={idx}>{store}</li>
+            ))}
+          </ul>
+          <p className="text-danger">You cannot disable a device that is assigned to a store.</p>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowDisableWarning(false)}>
+          Close
+        </Button>
+      </Modal.Footer>
+    </Modal>
+
+    {/* Disable Confirm Modal */}
+    <Modal show={showDisableConfirm} onHide={() => setShowDisableConfirm(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>Disable Device</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="text-center py-3">
+          <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
+          <p className="mt-3 mb-0">Are you sure you want to disable this device?</p>
+          <p className="text-danger">This action cannot be undone and you will not be able to enable it again.</p>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowDisableConfirm(false)}>
+          Cancel
+        </Button>
+        <Button variant="danger" onClick={confirmDisableDevice}>
+          Disable
+        </Button>
+      </Modal.Footer>
+    </Modal>
     </div>
   );
 }

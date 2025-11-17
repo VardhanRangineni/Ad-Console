@@ -1,0 +1,44 @@
+// IndexedDB helper for content and images using idb
+import { openDB } from 'idb';
+
+const DB_NAME = 'ad-console-db';
+const DB_VERSION = 3;
+const CONTENT_STORE = 'content';
+const DEVICE_STORE = 'devices';
+const PLAYLIST_STORE = 'playlists';
+
+export async function getDB() {
+  return openDB(DB_NAME, DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(CONTENT_STORE)) {
+        db.createObjectStore(CONTENT_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(DEVICE_STORE)) {
+        db.createObjectStore(DEVICE_STORE, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+        db.createObjectStore(PLAYLIST_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+    },
+  });
+}
+
+export async function addContent(content) {
+  const db = await getDB();
+  return db.add(CONTENT_STORE, content);
+}
+
+export async function getAllContent() {
+  const db = await getDB();
+  return db.getAll(CONTENT_STORE);
+}
+
+export async function updateContent(content) {
+  const db = await getDB();
+  return db.put(CONTENT_STORE, content);
+}
+
+export async function deleteContent(id) {
+  const db = await getDB();
+  return db.delete(CONTENT_STORE, id);
+}
