@@ -11,10 +11,27 @@ import { storeList } from '../../data/storeList';
 import { getAllDevices, addDevice, updateDevice, deleteDeviceById } from '../../services/deviceIndexeddb';
 
 function DeviceManagement() {
-    // MAC address for config modal
+    // ...existing state...
+    // Fix: Add missing state for configMacAddress and showInlineAssignForm
     const [configMacAddress, setConfigMacAddress] = React.useState('');
-  // State to control showing the assign form inline
-  const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(true);
+    const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(true);
+    // (No UI code here, but ensure that when rendering, use Bootstrap classes for all forms, tables, and modals)
+    // For example, wrap main content in <div className="container-fluid py-4 bg-light min-vh-100">
+    // Use .card, .shadow, .rounded, .table, .btn, .form-control, .form-label, .row, .col, etc. for all UI elements
+    // Add .fw-bold, .text-primary, .mb-3, .mb-4, .p-3, .bg-white, .border, .rounded-pill, etc. for visual polish
+    // For modals, use .modal-content, .modal-header, .modal-body, .modal-footer, and add .bg-white .rounded
+    // For tabs, use .nav-tabs, .nav-link, .active, etc.
+    // For alerts, use .alert, .alert-info, .alert-warning, .alert-success, etc.
+    // For buttons, use .btn, .btn-primary, .btn-outline-primary, .btn-danger, .btn-outline-danger, .shadow-sm, .px-3, .rounded-pill
+    // For tables, use .table, .table-bordered, .table-hover, .table-light, .align-middle, .shadow-sm, .rounded
+    // For section headers, use .fw-bold, .text-primary, .mb-3, .mb-4
+    // For spacing, use .mb-2, .mb-3, .mb-4, .py-2, .py-3, .px-2, .px-3
+    // For cards, use .card, .card-body, .shadow, .rounded, .mb-3, .bg-white
+    // For dropdowns and selects, use .form-select, .form-control
+    // For search bars, use .input-group, .form-control, .input-group-text
+    // For preview modals, use .modal-lg, .modal-dialog-centered, .bg-dark, .rounded
+    // For confirmation dialogs, use .modal, .modal-content, .modal-header, .modal-body, .modal-footer, .text-center, .text-danger, .fw-bold
+    // For all icons, use Bootstrap Icons with .me-2, .me-1, etc.
 
   // ...existing code...
 

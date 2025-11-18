@@ -312,272 +312,281 @@ function ContentLibrary() {
 
   return (
     <>
-      <div className="content-library">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h2 className="mb-0">
-            <i className="bi bi-collection-play me-2"></i>
-            Content Library
-          </h2>
-        </div>
-        <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-4">
-          <Tab eventKey="active" title="Active Content">
-            <div className="mb-3 d-flex justify-content-end">
-              <Button variant="primary" onClick={openAddModal}>
-                <i className="bi bi-plus-circle me-2"></i>
-                Add Content
-              </Button>
-            </div>
-            <Table bordered hover responsive>
-              <thead>
-                <tr>
-                  <th>Record ID</th>
-                  <th>Content Name</th>
-                  <th>Number of Images</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContent.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center text-muted">No content found</td></tr>
-                ) : filteredContent.map(content => (
-                  <tr key={content.id}>
-                    <td>{content.id}</td>
-                    <td>{content.title}</td>
-                    <td>{content.slides ? content.slides.length : 1}</td>
-                    <td>
-                      {content.active !== false && !content.permanentlyDisabled && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          className="me-2"
-                          onClick={() => handleDisableRequest(content)}
-                        >
-                          Disable
-                        </Button>
-                      )}
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleEdit(content)}
-                      >
-                        Edit
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Tab>
-          <Tab eventKey="inactive" title="Inactive Content">
-            <Table bordered hover responsive>
-              <thead>
-                <tr>
-                  <th>Record ID</th>
-                  <th>Content Name</th>
-                  <th>Number of Images</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContent.length === 0 ? (
-                  <tr><td colSpan={3} className="text-center text-muted">No content found</td></tr>
-                ) : filteredContent.map(content => (
-                  <tr key={content.id}>
-                    <td>{content.id}</td>
-                    <td>{content.title}</td>
-                    <td>{content.slides ? content.slides.length : 1}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Tab>
-        </Tabs>
-      </div>
-      {/* Edit Modal */}
-      <Modal show={showEditModal} onHide={closeEditModal} size="xl">
-        <Modal.Header closeButton>
-          <Modal.Title>View Images</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {editError && <div className="alert alert-danger">{editError}</div>}
-          {editContent && (
-            <>
-              <div className="d-flex flex-wrap gap-3 mb-3">
-                {(editContent.slides || [editContent.fileUrl]).map((media, idx) => (
-                  <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8 }}>
-                    {media.type === 'video' ? (
-                      <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
-                    ) : (
-                      <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
-                    )}
-                    <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Add More Images or Videos</label>
-                <input type="file" accept="image/*,video/*" multiple onChange={handleEditAddFiles} className="form-control" />
-                {editMediaResolutions.length > 0 && (
-                  <div className="mt-2">
-                    <strong>Selected Media Resolutions:</strong>
-                    <Table bordered size="sm" className="mt-2">
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Type</th>
-                          <th>Width</th>
-                          <th>Height</th>
-                          <th>Orientation</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {editMediaResolutions.map((m, i) => (
-                          <tr key={i}>
-                            <td>{m.name}</td>
-                            <td>{m.type}</td>
-                            <td>{m.width}</td>
-                            <td>{m.height}</td>
-                            <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  </div>
-                )}
-                <button className="btn btn-primary mt-2" onClick={handleEditSaveFiles} disabled={editNewFiles.length === 0}>Add to Content</button>
-              </div>
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closeEditModal}>Close</Button>
-        </Modal.Footer>
-      </Modal>
-      {/* Add Content Modal */}
-      <Modal show={showAddModal} onHide={closeAddModal} size="xl">
-        <Modal.Header closeButton>
-          <Modal.Title>Add Content</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {addError && <Alert variant="danger">{addError}</Alert>}
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Content Name</Form.Label>
-              <Form.Control
-                type="text"
-                value={newContentName}
-                onChange={e => setNewContentName(e.target.value)}
-                placeholder="Enter content name"
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Upload Images or Videos</Form.Label>
-              <Form.Control
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                onChange={handleAddMedia}
-              />
-              <Form.Text className="text-muted">
-                You can select multiple images and videos.
-              </Form.Text>
-            </Form.Group>
-            {mediaResolutions.length > 0 && (
-              <div className="mb-3">
-                <strong>Selected Media Resolutions:</strong>
-                <Table bordered size="sm" className="mt-2">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Type</th>
-                      <th>Width</th>
-                      <th>Height</th>
-                      <th>Orientation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mediaResolutions.map((m, i) => (
-                      <tr key={i}>
-                        <td>
-                          {m.type === 'image' && m.dataUrl ? (
-                            <span
-                              style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
-                              onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl })}
-                              onMouseLeave={() => setPreviewAnchor(null)}
-                              onClick={() => setPreviewImage(m.dataUrl)}
-                            >
-                              {m.name}
-                            </span>
-                          ) : m.name}
-                        </td>
-                        <td>{m.type}</td>
-                        <td>{m.width}</td>
-                        <td>{m.height}</td>
-                        <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
-            )}
-            {deviceResolutions.landscape.length === 0 && deviceResolutions.portrait.length === 0 ? (
-              <Alert variant="warning">
-                No device resolutions found.{' '}
-                <a href="/devices" style={{ textDecoration: 'underline', cursor: 'pointer' }}>Add a device</a> to show available resolutions.
-              </Alert>
-            ) : (
-              <Alert variant="info">
-                <div><b>Available Landscape Sizes:</b> {deviceResolutions.landscape.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
-                <div><b>Available Portrait Sizes:</b> {deviceResolutions.portrait.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
-              </Alert>
-            )}
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closeAddModal}>Cancel</Button>
-          <Button variant="primary" onClick={handleAddContent}>Add</Button>
-        </Modal.Footer>
-      </Modal>
-      {/* Disable Warning Modal */}
-      <Modal show={showDisableModal} onHide={handleCancelDisable} size="md" centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Disable Content</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <div className="text-center py-3">
-            <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '3rem' }}></i>
-            <p className="mt-3 mb-0">Are you sure you want to <b>disable</b> this content?</p>
-            <p className="fw-bold">This action cannot be undone.</p>
-            <p className="text-danger">You cannot enable this content again. It will remain in the database but cannot be used.</p>
+      <div className="container-fluid py-4 content-library bg-light min-vh-100">
+        <div className="row mb-4">
+          <div className="col-12 d-flex justify-content-between align-items-center">
+            <h2 className="mb-0 fw-bold text-primary">
+              <i className="bi bi-collection-play me-2"></i>
+              Content Library
+            </h2>
+            <Button variant="primary" className="shadow-sm" onClick={openAddModal}>
+              <i className="bi bi-plus-circle me-2"></i>
+              Add Content
+            </Button>
           </div>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleCancelDisable}>Cancel</Button>
-          <Button variant="danger" onClick={handleConfirmDisable}>Disable</Button>
-        </Modal.Footer>
-      </Modal>
-      {/* Thumbnail preview on hover */}
-      {previewAnchor && (
-        <div
-          style={{
-            position: 'fixed',
-            left: previewAnchor.x + 10,
-            top: previewAnchor.y + 10,
-            background: '#fff',
-            border: '1px solid #ccc',
-            padding: 2,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            zIndex: 2000
-          }}
-        >
-          <img src={previewAnchor.url} alt="preview" style={{ maxWidth: 120, maxHeight: 80 }} />
         </div>
-      )}
-      {/* Full image modal on click */}
-      <Modal show={!!previewImage} onHide={() => setPreviewImage(null)} centered size="lg">
-        <Modal.Body style={{ textAlign: 'center', background: '#222' }}>
-          {previewImage && <img src={previewImage} alt="preview" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />}
-        </Modal.Body>
-      </Modal>
+        <div className="row">
+          <div className="col-12">
+            <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-4">
+              <Tab eventKey="active" title={<span className="fw-semibold">Active Content</span>}>
+                <div className="table-responsive rounded shadow-sm bg-white p-3">
+                  <Table bordered hover responsive className="align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Record ID</th>
+                        <th>Content Name</th>
+                        <th>Number of Images</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredContent.length === 0 ? (
+                        <tr><td colSpan={4} className="text-center text-muted">No content found</td></tr>
+                      ) : filteredContent.map(content => (
+                        <tr key={content.id}>
+                          <td>{content.id}</td>
+                          <td>{content.title}</td>
+                          <td>{content.slides ? content.slides.length : 1}</td>
+                          <td>
+                            {content.active !== false && !content.permanentlyDisabled && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                className="me-2 rounded-pill px-3"
+                                onClick={() => handleDisableRequest(content)}
+                              >
+                                <i className="bi bi-x-circle me-1"></i> Disable
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline-primary"
+                              size="sm"
+                              className="rounded-pill px-3"
+                              onClick={() => handleEdit(content)}
+                            >
+                              <i className="bi bi-pencil-square me-1"></i> Edit
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              </Tab>
+              <Tab eventKey="inactive" title={<span className="fw-semibold">Inactive Content</span>}>
+                <div className="table-responsive rounded shadow-sm bg-white p-3">
+                  <Table bordered hover responsive className="align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Record ID</th>
+                        <th>Content Name</th>
+                        <th>Number of Images</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredContent.length === 0 ? (
+                        <tr><td colSpan={3} className="text-center text-muted">No content found</td></tr>
+                      ) : filteredContent.map(content => (
+                        <tr key={content.id}>
+                          <td>{content.id}</td>
+                          <td>{content.title}</td>
+                          <td>{content.slides ? content.slides.length : 1}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              </Tab>
+            </Tabs>
+          </div>
+        </div>
+        {/* Edit Modal */}
+        <Modal show={showEditModal} onHide={closeEditModal} size="xl">
+          <Modal.Header closeButton>
+            <Modal.Title>View Images</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {editError && <div className="alert alert-danger">{editError}</div>}
+            {editContent && (
+              <>
+                <div className="d-flex flex-wrap gap-3 mb-3">
+                  {(editContent.slides || [editContent.fileUrl]).map((media, idx) => (
+                    <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8 }}>
+                      {media.type === 'video' ? (
+                        <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
+                      ) : (
+                        <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
+                      )}
+                      <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Add More Images or Videos</label>
+                  <input type="file" accept="image/*,video/*" multiple onChange={handleEditAddFiles} className="form-control" />
+                  {editMediaResolutions.length > 0 && (
+                    <div className="mt-2">
+                      <strong>Selected Media Resolutions:</strong>
+                      <Table bordered size="sm" className="mt-2">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Width</th>
+                            <th>Height</th>
+                            <th>Orientation</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {editMediaResolutions.map((m, i) => (
+                            <tr key={i}>
+                              <td>{m.name}</td>
+                              <td>{m.type}</td>
+                              <td>{m.width}</td>
+                              <td>{m.height}</td>
+                              <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </div>
+                  )}
+                  <button className="btn btn-primary mt-2" onClick={handleEditSaveFiles} disabled={editNewFiles.length === 0}>Add to Content</button>
+                </div>
+              </>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={closeEditModal}>Close</Button>
+          </Modal.Footer>
+        </Modal>
+        {/* Add Content Modal */}
+        <Modal show={showAddModal} onHide={closeAddModal} size="xl">
+          <Modal.Header closeButton>
+            <Modal.Title>Add Content</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {addError && <Alert variant="danger">{addError}</Alert>}
+            <Form>
+              <Form.Group className="mb-3">
+                <Form.Label>Content Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={newContentName}
+                  onChange={e => setNewContentName(e.target.value)}
+                  placeholder="Enter content name"
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Upload Images or Videos</Form.Label>
+                <Form.Control
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={handleAddMedia}
+                />
+                <Form.Text className="text-muted">
+                  You can select multiple images and videos.
+                </Form.Text>
+              </Form.Group>
+              {mediaResolutions.length > 0 && (
+                <div className="mb-3">
+                  <strong>Selected Media Resolutions:</strong>
+                  <Table bordered size="sm" className="mt-2">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Width</th>
+                        <th>Height</th>
+                        <th>Orientation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mediaResolutions.map((m, i) => (
+                        <tr key={i}>
+                          <td>
+                            {m.type === 'image' && m.dataUrl ? (
+                              <span
+                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl })}
+                                onMouseLeave={() => setPreviewAnchor(null)}
+                                onClick={() => setPreviewImage(m.dataUrl)}
+                              >
+                                {m.name}
+                              </span>
+                            ) : m.name}
+                          </td>
+                          <td>{m.type}</td>
+                          <td>{m.width}</td>
+                          <td>{m.height}</td>
+                          <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+              {deviceResolutions.landscape.length === 0 && deviceResolutions.portrait.length === 0 ? (
+                <Alert variant="warning">
+                  No device resolutions found.{' '}
+                  <a href="/devices" style={{ textDecoration: 'underline', cursor: 'pointer' }}>Add a device</a> to show available resolutions.
+                </Alert>
+              ) : (
+                <Alert variant="info">
+                  <div><b>Available Landscape Sizes:</b> {deviceResolutions.landscape.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
+                  <div><b>Available Portrait Sizes:</b> {deviceResolutions.portrait.map(r => `${r.width}x${r.height}`).join(', ') || 'None'}</div>
+                </Alert>
+              )}
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={closeAddModal}>Cancel</Button>
+            <Button variant="primary" onClick={handleAddContent}>Add</Button>
+          </Modal.Footer>
+        </Modal>
+        {/* Disable Warning Modal */}
+        <Modal show={showDisableModal} onHide={handleCancelDisable} size="md" centered>
+          <Modal.Header closeButton>
+            <Modal.Title>Disable Content</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <div className="text-center py-3">
+              <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '3rem' }}></i>
+              <p className="mt-3 mb-0">Are you sure you want to <b>disable</b> this content?</p>
+              <p className="fw-bold">This action cannot be undone.</p>
+              <p className="text-danger">You cannot enable this content again. It will remain in the database but cannot be used.</p>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={handleCancelDisable}>Cancel</Button>
+            <Button variant="danger" onClick={handleConfirmDisable}>Disable</Button>
+          </Modal.Footer>
+        </Modal>
+        {/* Thumbnail preview on hover */}
+        {previewAnchor && (
+          <div
+            style={{
+              position: 'fixed',
+              left: previewAnchor.x + 10,
+              top: previewAnchor.y + 10,
+              background: '#fff',
+              border: '1px solid #ccc',
+              padding: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              zIndex: 2000
+            }}
+          >
+            <img src={previewAnchor.url} alt="preview" style={{ maxWidth: 120, maxHeight: 80 }} />
+          </div>
+        )}
+        {/* Full image modal on click */}
+        <Modal show={!!previewImage} onHide={() => setPreviewImage(null)} centered size="lg">
+          <Modal.Body style={{ textAlign: 'center', background: '#222' }}>
+            {previewImage && <img src={previewImage} alt="preview" style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />}
+          </Modal.Body>
+        </Modal>
+      </div>
     </>
   );
 }

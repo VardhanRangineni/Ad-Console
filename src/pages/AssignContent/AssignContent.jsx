@@ -19,7 +19,6 @@ async function updatePlaylistInDB(id, updates) {
 	await db.put(PLAYLIST_STORE, updated);
 }
 
-
 async function savePlaylistToDB(playlist) {
 	const db = await getDB();
 	if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return;
@@ -32,9 +31,15 @@ async function getAllPlaylistsFromDB() {
 	return await db.getAll(PLAYLIST_STORE);
 }
 
-
-
 function AssignContent() {
+	// State for search bars
+	const [searchList, setSearchList] = useState("");
+	const [searchApproved, setSearchApproved] = useState("");
+	const [searchRejected, setSearchRejected] = useState("");
+	const [searchInactive, setSearchInactive] = useState("");
+	// State for disable confirmation modal
+	const [showDisableModal, setShowDisableModal] = useState(false);
+	const [disableTargetId, setDisableTargetId] = useState(null);
 					// Track which video indices are open in the preview modal
 				const [previewContent, setPreviewContent] = useState(null);
 				const [showPreview, setShowPreview] = useState(false);
@@ -720,9 +725,30 @@ function AssignContent() {
 				</Tab>
 				<Tab eventKey="list" title="List of Playlists">
 					<div className="p-3">
-						{addedRows.length > 0 ? (
-							<div style={{ overflowX: 'auto' }}>
-								<table className="table table-bordered table-sm align-middle">
+						   <div className="mb-2">
+							   <input
+								   type="text"
+								   className="form-control"
+								   placeholder="Search by name, region, or store..."
+								   value={searchList}
+								   onChange={e => setSearchList(e.target.value)}
+								   style={{ maxWidth: 320, display: 'inline-block' }}
+							   />
+						   </div>
+						   {addedRows.filter(row => {
+							   const q = searchList.toLowerCase();
+							   if (!q) return true;
+							   return (
+								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+							   );
+						   }).length > 0 ? (
+							   <div style={{ overflowX: 'auto' }}>
+								   <table className="table table-bordered table-sm align-middle">
 									<thead>
 										<tr>
 											<th>Playlist ID</th>
@@ -733,7 +759,20 @@ function AssignContent() {
 										</tr>
 									</thead>
 									<tbody>
-										{addedRows.map((row, idx) => (
+										   {addedRows
+											   .filter(row => {
+												   const q = searchList.toLowerCase();
+												   if (!q) return true;
+												   return (
+													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+												   );
+											   })
+											   .map((row, idx) => (
 											<tr key={row.id || idx}>
 												<td>{idx + 1}</td>
 												<td>{row.playlistName}</td>
@@ -822,44 +861,150 @@ function AssignContent() {
 						)}
 					</div>
 				</Tab>
-				<Tab eventKey="approved" title="Approved">
-					<div className="p-3">
-						{approvedRows.length > 0 ? (
-							<div style={{ overflowX: 'auto' }}>
-								<table className="table table-bordered table-sm align-middle">
-									<thead>
-										<tr>
-											<th>Playlist ID</th>
-											<th>Playlist Name</th>
-											<th>Region/Territory</th>
-											<th>Content Count</th>
-										</tr>
-									</thead>
-									<tbody>
-										{approvedRows.map((row, idx) => (
-											<tr key={row.id || idx}>
-												<td>{idx + 1}</td>
-												<td>{row.playlistName}</td>
-												<td>
-													{row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
-													{row.selectedState ? ` / ${row.selectedState}` : ''}
-													{row.selectedCity ? ` / ${row.selectedCity}` : ''}
-												</td>
-												<td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<Alert variant="secondary">No approved playlists.</Alert>
-						)}
-					</div>
-				</Tab>
+				   <Tab eventKey="approved" title="Approved">
+					   <div className="p-3">
+						   <div className="mb-2">
+							   <input
+								   type="text"
+								   className="form-control"
+								   placeholder="Search by name, region, or store..."
+								   value={searchApproved}
+								   onChange={e => setSearchApproved(e.target.value)}
+								   style={{ maxWidth: 320, display: 'inline-block' }}
+							   />
+						   </div>
+						   {approvedRows.filter(row => {
+							   const q = searchApproved.toLowerCase();
+							   if (!q) return true;
+							   return (
+								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+							   );
+						   }).length > 0 ? (
+							   <div style={{ overflowX: 'auto' }}>
+								   <table className="table table-bordered table-sm align-middle">
+									   <thead>
+										   <tr>
+											   <th>Playlist ID</th>
+											   <th>Playlist Name</th>
+											   <th>Region/Territory</th>
+											   <th>Content Count</th>
+											   <th>Action</th>
+										   </tr>
+									   </thead>
+									   <tbody>
+										   {approvedRows
+											   .filter(row => !row.inactive)
+											   .filter(row => {
+												   const q = searchApproved.toLowerCase();
+												   if (!q) return true;
+												   return (
+													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+												   );
+											   })
+											   .map((row, idx) => (
+											   <tr key={row.id || idx} style={row.inactive ? { opacity: 0.6, background: '#f8d7da' } : {}}>
+												   <td>{idx + 1}</td>
+												   <td>{row.playlistName}</td>
+												   <td>
+													   {row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
+													   {row.selectedState ? ` / ${row.selectedState}` : ''}
+													   {row.selectedCity ? ` / ${row.selectedCity}` : ''}
+												   </td>
+												   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+												   <td>
+													   {row.inactive ? (
+														   <span className="badge bg-danger">Disabled</span>
+													   ) : (
+														   <>
+															   <Button size="sm" variant="primary" className="me-2" onClick={async () => {
+																   setActiveTab('create');
+																   setPlaylistName(row.playlistName);
+																   setTerritoryType(row.territoryType);
+																   setSelectedCountry(row.selectedCountry || 'India');
+																   setSelectedState(row.selectedState || '');
+																   setSelectedCity(row.selectedCity || '');
+																   setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
+																   setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
+																   setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
+																	   const c = contentList.find(mc => String(mc.id) === String(id));
+																	   return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
+																   }) : []);
+																   setStartDate(row.startDate || '');
+																   setEndDate(row.endDate || '');
+																   setEditingPlaylistId(row.id);
+																   setWasApproved(true);
+															   }}>Edit</Button>
+															   <Button size="sm" variant="danger" className="ms-2" onClick={() => {
+																   setDisableTargetId(row.id);
+																   setShowDisableModal(true);
+															   }}>Disable</Button>
+															{/* Disable Confirmation Modal */}
+															{showDisableModal && (
+																<div className="modal fade show" style={{display:'block', background:'rgba(0,0,0,0.5)'}} tabIndex="-1">
+																	<div className="modal-dialog" style={{maxWidth: 400, margin: 'auto'}}>
+																		<div className="modal-content">
+																			<div className="modal-header">
+																				<h5 className="modal-title text-danger">Disable Playlist</h5>
+																				<button type="button" className="btn-close" onClick={() => setShowDisableModal(false)}></button>
+																			</div>
+																			<div className="modal-body">
+																				<p>Are you sure you want to <b>disable</b> this playlist? This action cannot be undone and the playlist will be moved to Inactive Playlists.</p>
+																			</div>
+																			<div className="modal-footer">
+																				<Button variant="secondary" onClick={() => setShowDisableModal(false)}>Cancel</Button>
+																				<Button variant="danger" onClick={async () => {
+																					await updatePlaylistInDB(disableTargetId, { inactive: true });
+																					// Move to inactive: reload all lists
+																					const all = await getAllPlaylistsFromDB();
+																					setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+																					setInactiveRows(all.filter(r => r.inactive));
+																					setApprovedRows(all.filter(r => r.status === 'approved'));
+																					setRejectedRows(all.filter(r => r.status === 'rejected'));
+																					setShowDisableModal(false);
+																					setDisableTargetId(null);
+																				}}>Disable</Button>
+																			</div>
+																		</div>
+																	</div>
+																</div>
+															)}
+														   </>
+													   )}
+												   </td>
+											   </tr>
+										   ))}
+									   </tbody>
+								   </table>
+							   </div>
+						   ) : (
+							   <Alert variant="secondary">No approved playlists.</Alert>
+						   )}
+					   </div>
+				   </Tab>
 				<Tab eventKey="rejected" title="Rejected">
 					<div className="p-3">
 						{rejectedRows.length > 0 ? (
 							<div style={{ overflowX: 'auto' }}>
+								<div className="mb-2" style={{ maxWidth: 320 }}>
+											   <input
+												   type="text"
+												   className="form-control"
+												   placeholder="Search by name, region, or store..."
+												   value={searchRejected}
+												   onChange={e => setSearchRejected(e.target.value)}
+											   />
+										   </div>
+
 								<table className="table table-bordered table-sm align-middle">
 									<thead>
 										<tr>
@@ -867,21 +1012,55 @@ function AssignContent() {
 											<th>Playlist Name</th>
 											<th>Region/Territory</th>
 											<th>Content Count</th>
+											<th>Action</th>
 										</tr>
 									</thead>
 									<tbody>
-										{rejectedRows.map((row, idx) => (
-											<tr key={row.id || idx}>
-												<td>{idx + 1}</td>
-												<td>{row.playlistName}</td>
-												<td>
-													{row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
-													{row.selectedState ? ` / ${row.selectedState}` : ''}
-													{row.selectedCity ? ` / ${row.selectedCity}` : ''}
-												</td>
-												<td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-											</tr>
-										))}
+										   {rejectedRows
+											   .filter(row => {
+												   const q = searchRejected.toLowerCase();
+												   if (!q) return true;
+												   return (
+													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+												   );
+											   })
+											   .map((row, idx) => (
+											   <tr key={row.id || idx}>
+												   <td>{idx + 1}</td>
+												   <td>{row.playlistName}</td>
+												   <td>
+													   {row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
+													   {row.selectedState ? ` / ${row.selectedState}` : ''}
+													   {row.selectedCity ? ` / ${row.selectedCity}` : ''}
+												   </td>
+												   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+												   <td>
+													   <Button size="sm" variant="outline-primary" onClick={() => {
+														   setActiveTab('create');
+														   setPlaylistName("");
+														   setTerritoryType(row.territoryType);
+														   setSelectedCountry(row.selectedCountry || 'India');
+														   setSelectedState(row.selectedState || '');
+														   setSelectedCity(row.selectedCity || '');
+														   setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
+														   setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
+														   setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
+															   const c = contentList.find(mc => String(mc.id) === String(id));
+															   return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
+														   }) : []);
+														   setStartDate(todayStr);
+														   setEndDate("");
+														   setEditingPlaylistId(null);
+														   setWasApproved(false);
+													   }}>Clone</Button>
+												   </td>
+											   </tr>
+										   ))}
 									</tbody>
 								</table>
 							</div>
@@ -892,10 +1071,31 @@ function AssignContent() {
 				</Tab>
 				<Tab eventKey="inactive" title="Inactive Playlists">
 					<div className="p-3">
-						{inactiveRows.length > 0 ? (
-							<div>
-								<div style={{ overflowX: 'auto' }}>
-									<table className="table table-bordered table-sm align-middle">
+						   <div className="mb-2">
+							   <input
+								   type="text"
+								   className="form-control"
+								   placeholder="Search by name, region, or store..."
+								   value={searchInactive}
+								   onChange={e => setSearchInactive(e.target.value)}
+								   style={{ maxWidth: 320, display: 'inline-block' }}
+							   />
+						   </div>
+						   {inactiveRows.filter(row => {
+							   const q = searchInactive.toLowerCase();
+							   if (!q) return true;
+							   return (
+								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+							   );
+						   }).length > 0 ? (
+							   <div>
+								   <div style={{ overflowX: 'auto' }}>
+									   <table className="table table-bordered table-sm align-middle">
 										<thead>
 											<tr>
 												<th>Playlist Name</th>
@@ -910,7 +1110,20 @@ function AssignContent() {
 											</tr>
 										</thead>
 										<tbody>
-											{inactiveRows.map((row, idx) => (
+											   {inactiveRows
+												   .filter(row => {
+													   const q = searchInactive.toLowerCase();
+													   if (!q) return true;
+													   return (
+														   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+														   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+														   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+														   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+														   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+														   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+													   );
+												   })
+												   .map((row, idx) => (
 												<tr key={idx}>
 													<td>{row.playlistName}</td>
 													<td>{row.territoryType}</td>
