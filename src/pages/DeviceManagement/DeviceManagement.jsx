@@ -11,6 +11,14 @@ import { storeList } from '../../data/storeList';
 import { getAllDevices, addDevice, updateDevice, deleteDeviceById } from '../../services/deviceIndexeddb';
 
 function DeviceManagement() {
+      // Load assignments from IndexedDB on mount
+      React.useEffect(() => {
+        async function loadAssignmentsFromDB() {
+          const all = await getAllAssignments();
+          setAssignments(all);
+        }
+        loadAssignmentsFromDB();
+      }, []);
     // ...existing state...
     // Fix: Add missing state for configMacAddress and showInlineAssignForm
     const [configMacAddress, setConfigMacAddress] = React.useState('');
