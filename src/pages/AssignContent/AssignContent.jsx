@@ -220,11 +220,28 @@ function AssignContent() {
 								</div>
 							</Form.Group>
 
-							{/* COUNTRY: Only show Store IDs (comma separated) */}
-							{territoryType === 'country' && null}
+							{/* COUNTRY: No dropdowns or store ID input */}
+							{territoryType === 'state' && (
+								<Form.Group className="mb-3">
+									<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
+									<Select
+										options={stateOptions.map(state => ({ value: state, label: state }))}
+										value={selectedState ? { value: selectedState, label: selectedState } : null}
+										onChange={selected => {
+											setSelectedState(selected ? selected.value : '');
+											setSelectedCity('');
+											setFilteredStoreIds([]);
+											setStoreIdInput([]);
+										}}
+										placeholder="Select state..."
+										isClearable
+										classNamePrefix="react-select"
+										styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
+									/>
+								</Form.Group>
+							)}
 
-							{/* STATE, CITY, STORE: Show state, city (optional), stores (filtered) if state is selected */}
-							{['state', 'city', 'store'].includes(territoryType) && (
+							{territoryType === 'city' && (
 								<>
 									<Form.Group className="mb-3">
 										<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
@@ -245,7 +262,7 @@ function AssignContent() {
 									</Form.Group>
 									{selectedState && (
 										<Form.Group className="mb-3">
-											<Form.Label style={{ fontWeight: 'bold' }}>Select City (optional)</Form.Label>
+											<Form.Label style={{ fontWeight: 'bold' }}>Select City</Form.Label>
 											<Form.Select
 												value={selectedCity}
 												onChange={e => {
@@ -260,52 +277,91 @@ function AssignContent() {
 											</Form.Select>
 										</Form.Group>
 									)}
-									{selectedState && (
-										<Form.Group className="mb-3" style={{ position: 'relative' }}>
-											<Form.Label style={{ fontWeight: 'bold' }}>Select Stores (filtered)</Form.Label>
-											<AsyncSelect
-												isMulti
-												cacheOptions
-												defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-												loadOptions={loadFilteredStoreOptions}
-												value={storeOptions.filter(opt => filteredStoreIds.includes(opt.id)).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-												onChange={selected => {
-													const ids = selected ? selected.map(opt => opt.value) : [];
-													setFilteredStoreIds(ids);
-												}}
-												placeholder="Select stores..."
-												classNamePrefix="react-select"
-												menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-												styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
-											/>
-										</Form.Group>
-									)}
 								</>
 							)}
 
-							{/* Store IDs (comma separated) as react-select creatable, always visible after all territory selectors */}
-							<Form.Group className="mb-3" style={{ position: 'relative' }}>
-								<Form.Label style={{ fontWeight: 'bold' }}>Store IDs (comma separated)</Form.Label>
-								<AsyncSelect
-									isMulti
-									cacheOptions
-									defaultOptions={allStoreOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-									loadOptions={loadAllStoreOptions}
-									value={storeIdInput.map(id => {
-										const store = allStoreOptions.find(s => s.id === id);
-										return store ? { value: store.id, label: `${store.name} (${store.id})` } : { value: id, label: id };
-									})}
-									onChange={selected => {
-										const ids = selected ? selected.map(opt => opt.value) : [];
-										setStoreIdInput(ids);
-									}}
-									placeholder="Search or enter store IDs..."
-									classNamePrefix="react-select"
-									menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-									styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
-							/>
-							<Form.Text className="text-muted">e.g. INWBQA00001, INWBQA00002</Form.Text>
-						</Form.Group>
+							{territoryType === 'store' && (
+								<>
+									<Form.Group className="mb-3">
+										<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
+										<Select
+											options={stateOptions.map(state => ({ value: state, label: state }))}
+											value={selectedState ? { value: selectedState, label: selectedState } : null}
+											onChange={selected => {
+												setSelectedState(selected ? selected.value : '');
+												setSelectedCity('');
+												setFilteredStoreIds([]);
+												setStoreIdInput([]);
+											}}
+											placeholder="Select state..."
+											isClearable
+											classNamePrefix="react-select"
+											styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
+										/>
+									</Form.Group>
+									{selectedState && (
+										<Form.Group className="mb-3">
+											<Form.Label style={{ fontWeight: 'bold' }}>Select City</Form.Label>
+											<Form.Select
+												value={selectedCity}
+												onChange={e => {
+													setSelectedCity(e.target.value);
+													setFilteredStoreIds([]);
+												}}
+											>
+												<option value="">-- Select City --</option>
+												{cityOptions.map(opt => (
+													<option key={opt.city} value={opt.city}>{opt.area}</option>
+												))}
+											</Form.Select>
+										</Form.Group>
+									)}
+									{selectedState && selectedCity && (
+										<>
+											<Form.Group className="mb-3" style={{ position: 'relative' }}>
+												<Form.Label style={{ fontWeight: 'bold' }}>Select Stores (filtered)</Form.Label>
+												<AsyncSelect
+													isMulti
+													cacheOptions
+													defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+													loadOptions={loadFilteredStoreOptions}
+													value={storeOptions.filter(opt => filteredStoreIds.includes(opt.id)).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+													onChange={selected => {
+														const ids = selected ? selected.map(opt => opt.value) : [];
+														setFilteredStoreIds(ids);
+													}}
+													placeholder="Select stores..."
+													classNamePrefix="react-select"
+													menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+													styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
+												/>
+											</Form.Group>
+											<Form.Group className="mb-3" style={{ position: 'relative' }}>
+												<Form.Label style={{ fontWeight: 'bold' }}>Store IDs (comma separated)</Form.Label>
+												<AsyncSelect
+													isMulti
+													cacheOptions
+													defaultOptions={allStoreOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+													loadOptions={loadAllStoreOptions}
+													value={storeIdInput.map(id => {
+														const store = allStoreOptions.find(s => s.id === id);
+														return store ? { value: store.id, label: `${store.name} (${store.id})` } : { value: id, label: id };
+													})}
+													onChange={selected => {
+														const ids = selected ? selected.map(opt => opt.value) : [];
+														setStoreIdInput(ids);
+													}}
+													placeholder="Search or enter store IDs..."
+													classNamePrefix="react-select"
+													menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+													styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
+												/>
+												<Form.Text className="text-muted">e.g. INWBQA00001, INWBQA00002</Form.Text>
+											</Form.Group>
+										</>
+									)}
+								</>
+							)}
 
 
 						{/* Start/End Date Pickers */}
