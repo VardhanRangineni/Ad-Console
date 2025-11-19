@@ -1,0 +1,125 @@
+.aside-toggle-row {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0.5rem 0.5rem 0 0.5rem;
+  min-height: 2.5rem;
+}
+.aside-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: var(--aside-width, 220px);
+  background: #222;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  z-index: 1040;
+  transition: width 0.2s;
+}
+.aside-bar.collapsed {
+  width: var(--aside-collapsed-width, 60px);
+}
+.aside-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.5rem 1rem;
+  border-bottom: 1px solid #333;
+  position: relative;
+}
+.brand {
+  font-weight: bold;
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+.collapse-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  margin-left: 0.5rem;
+}
+.aside-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 1rem;
+}
+.aside-link {
+  display: flex;
+  align-items: center;
+  color: #bbb;
+  text-decoration: none;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.aside-link.active, .aside-link:hover {
+  background: #343a40;
+  color: #fff;
+}
+
+/* Submenu styles */
+.aside-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+.aside-menu-parent {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #bbb;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.aside-menu-parent.open, .aside-menu-parent:hover {
+  background: #343a40;
+  color: #fff;
+}
+.aside-bar.collapsed .aside-menu-parent {
+  justify-content: center;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.aside-submenu {
+  display: none;
+  flex-direction: column;
+  background: #23272b;
+  padding-left: 1.5rem;
+}
+.aside-submenu.open {
+  display: flex;
+}
+.aside-sublink {
+  font-size: 0.97rem;
+  padding: 0.5rem 1rem;
+}
+.aside-bar.collapsed .aside-submenu {
+  display: none !important;
+}
+.aside-bar.collapsed .brand {
+  font-size: 1.5rem;
+}
+
+/* Ensure collapse button is always visible in collapsed state */
+.aside-bar.collapsed .collapse-btn {
+  position: absolute;
+  right: 10px;
+  top: 18px;
+  z-index: 2;
+  color: #fff;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  display: block;
+}

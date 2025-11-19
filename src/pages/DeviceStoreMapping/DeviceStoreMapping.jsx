@@ -539,87 +539,414 @@ function DeviceManagement() {
         </h2>
       </div>
 
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div></div>
-            <Button variant="primary" onClick={() => setShowAddModal(true)}>
-              <i className="bi bi-plus-circle me-2"></i>
-              Add New Device
-            </Button>
-          </div>
-          {devices.length === 0 ? (
-            <Alert variant="info">
-              <i className="bi bi-info-circle me-2"></i>
-              No devices registered yet. Click "Add New Device" to get started.
-            </Alert>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-bordered align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th>Device ID</th>
-                    <th>Device Name</th>
-                    <th>Resolution</th>
-                    <th>Possible Orientation</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {devices.map(device => {
-                    const isDisabled = disabledDevices.includes(device.id);
-                    return (
-                      <tr key={device.id}>
-                        <td>{device.id}</td>
-                        <td className="font-monospace small">{device.name}</td>
-                        <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
-                        <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}</td>
-                        <td>
-                          {/* Disable/Enable Toggle Switch */}
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            <Form.Check
-                              type="switch"
-                              id={`disable-switch-${device.id}`}
-                              checked={!isDisabled}
-                              onChange={() => handleToggleDisableDevice(device.id)}
-                              disabled={isDisabled}
-                              label={!isDisabled ? 'Active' : 'Inactive'}
-                              style={{ marginBottom: 0, marginRight: 8 }}
-                            />
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
-                            >
-                              <Button 
-                                variant="primary" 
-                                size="sm"
-                                className="me-2"
-                                onClick={() => openConfigModal(device)}
-                              >
-                                <i className="bi bi-gear"></i>
-                              </Button>
-                            </OverlayTrigger>
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
-                            >
-                              <Button 
-                                variant="secondary" 
-                                size="sm"
-                                className="me-2"
-                                onClick={() => handleCloneDevice(device)}
-                              >
-                                <i className="bi bi-files"></i>
-                              </Button>
-                            </OverlayTrigger>
+      {/* SUB-TABS SECTION (Assign/List View) */}
+      <Tabs
+        id="device-store-mapping-sub-tabs"
+        activeKey={activeSubTab}
+        onSelect={(k) => setActiveSubTab(k)}
+        className="mb-3"
+      >
+            <Tab eventKey="assign" title="Assign">
+              <div className="d-flex justify-content-end align-items-center mb-3">
+                <Button variant="outline-secondary" className="me-2" onClick={handleDownloadTemplate}>
+                  <i className="bi bi-file-earmark-arrow-down me-2"></i>
+                  Download Template
+                </Button>
+                <Button variant="info" className="me-2" onClick={() => fileInputRef.current.click()}>
+                  <i className="bi bi-upload me-2"></i>
+                  Upload Assignments
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                  accept=".xlsx, .xls"
+                />
+              </div>
+            <Row>
+                <Col md={7} style={{ width: '60%' }} className="d-flex align-items-end">
+                  <Form.Group className="mb-3 flex-grow-1 me-2">
+                    <Form.Label>Search for a store by ID or name</Form.Label>
+                    <AsyncSelect
+                      cacheOptions
+                      defaultOptions={storeOptions.slice(0, 30)}
+                      loadOptions={loadStoreOptions}
+                      isClearable
+                      placeholder="Type to search..."
+                      value={selectedStoreForAssignment}
+                      onChange={(selected) => {
+                        setSelectedStoreForAssignment(selected);
+                        setDeviceToAssign(null);
+                        setMacAddressToAssign('');
+                        setOrientationToAssign('');
+                      }}
+                    />
+                  </Form.Group>
+                  {selectedStoreForAssignment && devicesForSelectedStore.length > 0 && (
+                    <Button
+                      variant="primary"
+                      className="mb-3"
+                      onClick={() => setShowInlineAssignForm(v => !v)}
+                    >
+                      <i className="bi bi-plus-circle me-2"></i>
+                      {showInlineAssignForm ? 'Hide Assign Form' : 'Assign Device'}
+                    </Button>
+                  )}
+                </Col>
+              </Row>
+
+              {selectedStoreForAssignment && (
+                <>
+                  {devicesForSelectedStore.length > 0 ? (
+                    <div className="mt-4">
+                      {showInlineAssignForm && (
+                        <>
+                               <br></br>
+                          <h5>Assign a New Device to {selectedStoreForAssignment.label}</h5>
+                          <Row className="align-items-end mb-4">
+                            <Col md={4}>
+                              <Form.Group>
+                                <Form.Label>Select Device Model</Form.Label>
+                                <Form.Select
+                                  value={deviceToAssign || ''}
+                                  onChange={e => setDeviceToAssign(e.target.value)}
+                                >
+                                  <option value="">-- Select Device --</option>
+                                  {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                </Form.Select>
+                              </Form.Group>
+                            </Col>
+                            <Col md={3}>
+                              <Form.Group>
+                                <Form.Label>MAC Address</Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="00:00:00:00:00:00"
+                                  value={macAddressToAssign}
+                                  maxLength={17}
+                                  onChange={e => {
+                                    let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                    value = value.slice(0, 12); // Limit to 12 hex digits
+                                    value = value.match(/.{1,2}/g)?.join(':') || '';
+                                    setMacAddressToAssign(value);
+                                  }}
+                                  isInvalid={!!macAddressToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)}
+                                />
+                                <Form.Control.Feedback type="invalid">
+                                  Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                                </Form.Control.Feedback>
+                              </Form.Group>
+                            </Col>
+                            {deviceToAssign && (() => {
+                                const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
+                                if (!selectedDeviceForAssignment) return null;
+                                return (
+                                    <Col md={3}>
+                                        <Form.Group>
+                                        <Form.Label>Orientation</Form.Label>
+                                        {selectedDeviceForAssignment.orientation === 'both' ? (
+                                            <div>
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id="orientation-horizontal-radio"
+                                                label={<label htmlFor="orientation-horizontal-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
+                                                name="orientation"
+                                                value="horizontal"
+                                                checked={orientationToAssign === 'horizontal'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id="orientation-vertical-radio"
+                                                label={<label htmlFor="orientation-vertical-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
+                                                name="orientation"
+                                                value="vertical"
+                                                checked={orientationToAssign === 'vertical'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                            </div>
+                                        ) : (
+                                            <p className="form-control-static" style={{ paddingTop: '7px' }}>
+                                            {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}
+                                            </p>
+                                        )}
+                                        </Form.Group>
+                                    </Col>
+                                );
+                            })()}
+                            <Col md={2}>
+                                <Button 
+                                  variant="primary" 
+                                  onClick={handleAssignNewDevice}
+                                  disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign || !isValidMac}
+                                >
+                                  Assign Device
+                                </Button>
+                            </Col>
+                          </Row>
+                          <div className="d-flex justify-content-end mt-3">
+                            <Button variant="primary" onClick={handleAssignTabSaveChanges}>
+                              <i className="bi bi-save me-2"></i>
+                              Save Changes
+                            </Button>
                           </div>
-                        </td>
+                        </>
+                      )}
+                      <h5>Assigned Devices for {selectedStoreForAssignment.label}</h5>
+                      <div className="table-responsive mb-4">
+                        <table className="table table-bordered align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Device Name</th>
+                              <th>Device ID</th>
+                              <th>MAC Address</th>
+                              <th>Orientation</th>
+                              <th>Status</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {assignTabAssignments.map(device => (
+                              <tr key={device.assignmentId}>
+                                <td>{device.name}</td>
+                                <td>{device.id}</td>
+                                <td>{device.macAddress}</td>
+                                <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A')}</td>
+                                <td>
+                                  <Badge bg={device.active ? 'success' : 'danger'}>
+                                    {device.active ? 'Active' : 'Inactive'}
+                                  </Badge>
+                                </td>
+                                <td className="d-flex gap-2 align-items-center">
+                                  <Form.Check
+                                    type="switch"
+                                    id={`switch-assign-${device.assignmentId}`}
+                                    checked={device.active}
+                                    onChange={() => {
+                                      setAssignTabAssignments(prev => prev.map(d =>
+                                        d.assignmentId === device.assignmentId ? { ...d, active: !d.active } : d
+                                      ));
+                                    }}
+                                    label={device.active ? 'Deactivate' : 'Activate'}
+                                  />
+                                  <OverlayTrigger
+                                    placement="top"
+                                    overlay={<Tooltip id={`tooltip-delete-assign-${device.assignmentId}`}>Delete</Tooltip>}
+                                  >
+                                    <Button variant="outline-danger" size="sm" onClick={() => {
+                                      setAssignTabAssignments(prev => prev.filter(d => d.assignmentId !== device.assignmentId));
+                                    }}>
+                                      <i className="bi bi-trash"></i>
+                                    </Button>
+                                  </OverlayTrigger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4">
+                      <h5>Assign a New Device to {selectedStoreForAssignment.label}</h5>
+                      <Row className="align-items-end">
+                        <Col md={4}>
+                          <Form.Group>
+                            <Form.Label>Select Device Model</Form.Label>
+                            <Form.Select
+                              value={deviceToAssign || ''}
+                              onChange={e => setDeviceToAssign(e.target.value)}
+                            >
+                              <option value="">-- Select Device --</option>
+                              {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            </Form.Select>
+                          </Form.Group>
+                        </Col>
+                        <Col md={3}>
+                          <Form.Group>
+                                <Form.Label>MAC Address</Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="00:00:00:00:00:00"
+                                  value={macAddressToAssign}
+                                  maxLength={17}
+                                  onChange={e => {
+                                    let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                    value = value.slice(0, 12); // Limit to 12 hex digits
+                                    value = value.match(/.{1,2}/g)?.join(':') || '';
+                                    setMacAddressToAssign(value);
+                                  }}
+                                  isInvalid={!!macAddressToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)}
+                                />
+                                <Form.Control.Feedback type="invalid">
+                                  Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                                </Form.Control.Feedback>
+                              </Form.Group>
+                        </Col>
+                        {deviceToAssign && (() => {
+                            const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
+                            if (!selectedDeviceForAssignment) return null;
+                            return (
+                                <Col md={3}>
+                                    <Form.Group>
+                                    <Form.Label>Orientation</Form.Label>
+                                    {selectedDeviceForAssignment.orientation === 'both' ? (
+                                        <div>
+                                        <Form.Check
+                                            inline
+                                            type="radio"
+                                            label="Landscape"
+                                            name="orientation"
+                                            value="horizontal"
+                                            checked={orientationToAssign === 'horizontal'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                        />
+                                        <Form.Check
+                                            inline
+                                            type="radio"
+                                            label="Portrait"
+                                            name="orientation"
+                                            value="vertical"
+                                            checked={orientationToAssign === 'vertical'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                        />
+                                        </div>
+                                    ) : (
+                                        <p className="form-control-static" style={{ paddingTop: '7px' }}>
+                                        {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'} <Badge bg="info">Auto</Badge>
+                                        </p>
+                                    )}
+                                    </Form.Group>
+                                </Col>
+                            );
+                        })()}
+                        <Col md={2}>
+                            <Button 
+                                variant="primary" 
+                                onClick={handleAssignNewDevice}
+                                disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign}
+                                >
+                                Assign Device
+                            </Button>
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+                </>
+              )}
+            </Tab>
+            <Tab eventKey="listView" title="List View">
+              <div className="d-flex justify-content-end align-items-center mb-3">
+                <Button variant="success" className="me-2" onClick={handleDownload}>
+                  <i className="bi bi-download me-2"></i>
+                  Download
+                </Button>
+              </div>
+              {storeDeviceMap.length > 0 ? (
+                <div className="table-responsive">
+                  <table className="table table-bordered align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th>
+                          Store ID
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStoreIdFilter}
+                            onChange={e => setListViewStoreIdFilter(e.target.value)}
+                            style={{ minWidth: 80, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          Store Name
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStoreNameFilter}
+                            onChange={e => setListViewStoreNameFilter(e.target.value)}
+                            style={{ minWidth: 120, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          City
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewCityFilter}
+                            onChange={e => setListViewCityFilter(e.target.value)}
+                            style={{ minWidth: 100, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>
+                          State
+                          <Form.Control
+                            size="sm"
+                            type="text"
+                            placeholder="Filter"
+                            value={listViewStateFilter}
+                            onChange={e => setListViewStateFilter(e.target.value)}
+                            style={{ minWidth: 100, marginTop: 4 }}
+                          />
+                        </th>
+                        <th>Count of Devices</th>
+                        <th>Actions</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        
+                    </thead>
+                    <tbody>
+                      {storeDeviceMap
+                        .filter(store => {
+                          // All filters are case-insensitive substring match
+                          const idMatch = listViewStoreIdFilter.trim() === '' || store.id.toLowerCase().includes(listViewStoreIdFilter.trim().toLowerCase());
+                          const nameMatch = listViewStoreNameFilter.trim() === '' || (store.name && store.name.toLowerCase().includes(listViewStoreNameFilter.trim().toLowerCase()));
+                          const cityMatch = listViewCityFilter.trim() === '' || (store.area && store.area.toLowerCase().includes(listViewCityFilter.trim().toLowerCase()));
+                          const stateMatch = listViewStateFilter.trim() === '' || (store.state && store.state.toLowerCase().includes(listViewStateFilter.trim().toLowerCase()));
+                          return idMatch && nameMatch && cityMatch && stateMatch;
+                        })
+                        .map(store => (
+                          <tr key={store.id}>
+                            <td>{store.id}</td>
+                            <td>{store.name}</td>
+                            <td>{store.area}</td>
+                            <td>{store.state}</td>
+                            <td>{store.deviceCount}</td>
+                            <td className="d-flex gap-2">
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-edit-${store.id}`}>Edit</Tooltip>}
+                              >
+                                <Button variant="outline-primary" size="sm" onClick={() => handleListViewEdit(store)}>
+                                  <i className="bi bi-pencil-square"></i>
+                                </Button>
+                              </OverlayTrigger>
+                              <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id={`tooltip-delete-${store.id}`}>Delete</Tooltip>}
+                              >
+                                <Button variant="outline-danger" size="sm" onClick={() => handleDeleteStore(store.id)}>
+                                  <i className="bi bi-trash"></i>
+                                </Button>
+                              </OverlayTrigger>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Alert variant="info">
+                  <i className="bi bi-info-circle me-2"></i>
+                  No devices have been assigned to a store yet.
+                </Alert>
+              )}
+            </Tab>
+          </Tabs>
+      {/* End sub-tabs */}
 
       {/* Add Device Modal */}
       <Modal show={showAddModal} onHide={() => { setShowAddModal(false); setIsClone(false); }} size="xl">

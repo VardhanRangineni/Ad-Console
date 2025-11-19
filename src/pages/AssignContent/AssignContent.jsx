@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import AsyncSelect from 'react-select/async';
 import { Tabs, Tab, Button, Form, Alert, Table } from 'react-bootstrap';
@@ -10,7 +11,7 @@ import { getAllContent, getDB } from '../../services/indexeddb';
 const PLAYLIST_STORE = 'playlists';
 
 // Update playlist in DB by id
-async function updatePlaylistInDB(id, updates) {
+export async function updatePlaylistInDB(id, updates) {
 	const db = await getDB();
 	if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return;
 	const playlist = await db.get(PLAYLIST_STORE, id);
@@ -25,13 +26,79 @@ async function savePlaylistToDB(playlist) {
 	await db.add(PLAYLIST_STORE, playlist);
 }
 
-async function getAllPlaylistsFromDB() {
+export async function getAllPlaylistsFromDB() {
 	const db = await getDB();
 	if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return [];
 	return await db.getAll(PLAYLIST_STORE);
 }
 
 function AssignContent() {
+	const location = useLocation();
+	// Helper to format region/territory string for display and storage
+	// Helper to format region/store code as per required nomenclature
+	function getRegionNomenclature({ territoryType, selectedCountry, selectedState, selectedCity, filteredStoreIds, storeIdInput }) {
+		// Helper to get state/city/store codes
+		const getStateCode = (state) => {
+			// Try to find a store with this state and get its code (assume code is first 2 after IN)
+			const found = storeList.find(s => s.state === state);
+			if (found && found.id && found.id.length >= 4) return found.id.substring(2, 4);
+			// fallback: first 2 letters of state
+			return (state || '').substring(0, 2).toUpperCase();
+		};
+		const getCityCode = (city, state) => {
+			// Try to find a store with this city/state and get its code (assume code is next 3 after IN + state)
+			const found = storeList.find(s => s.city === city && (!state || s.state === state));
+			if (found && found.id && found.id.length >= 7) return found.id.substring(4, 7);
+			// fallback: first 3 letters of city
+			return (city || '').substring(0, 3).toUpperCase();
+		};
+		const getStoreCode = (storeId) => {
+			// Use as is
+			return storeId;
+		};
+		// Country only
+		if (territoryType === 'country') {
+			return 'IN';
+		}
+		// State(s)
+		if (territoryType === 'state') {
+			if (Array.isArray(selectedState) && selectedState.length > 0) {
+				return selectedState.map(st => `IN${getStateCode(st)}`).join(',');
+			}
+			return selectedState ? `IN${getStateCode(selectedState)}` : '';
+		}
+		// City/cities
+		if (territoryType === 'city') {
+			if (Array.isArray(selectedState) && selectedState.length > 0 && Array.isArray(selectedCity) && selectedCity.length > 0) {
+				// Cross product of states and cities
+				return selectedState.map(st => selectedCity.map(city => `IN${getStateCode(st)}${getCityCode(city, st)}`)).flat().join(',');
+			}
+			return '';
+		}
+		// Store(s)
+		if (territoryType === 'store') {
+			// Combine both filteredStoreIds and storeIdInput, remove duplicates
+			let allStores = [];
+			if (Array.isArray(filteredStoreIds) && filteredStoreIds.length > 0) {
+				allStores = allStores.concat(filteredStoreIds);
+			}
+			if (Array.isArray(storeIdInput) && storeIdInput.length > 0) {
+				allStores = allStores.concat(storeIdInput);
+			}
+			// Remove duplicates
+			allStores = Array.from(new Set(allStores));
+			if (allStores.length > 0) {
+				// For store level, always show the full store ID (not just prefix)
+				return allStores.join(',');
+			}
+			// fallback: state/city
+			if (Array.isArray(selectedState) && selectedState.length > 0 && Array.isArray(selectedCity) && selectedCity.length > 0) {
+				return selectedState.map(st => selectedCity.map(city => `IN${getStateCode(st)}${getCityCode(city, st)}`)).flat().join(',');
+			}
+			return '';
+		}
+		return '';
+	}
 	// State for search bars
 	const [searchList, setSearchList] = useState("");
 	const [searchApproved, setSearchApproved] = useState("");
@@ -58,15 +125,16 @@ function AssignContent() {
 		const [editingPlaylistId, setEditingPlaylistId] = useState(null);
 		const [wasApproved, setWasApproved] = useState(false);
 	// All hooks and state at the top
-	const [activeTab, setActiveTab] = useState('create');
+	const [activeTab, setActiveTab] = useState('list');
 	const [playlistName, setPlaylistName] = useState('');
 	const [territoryType, setTerritoryType] = useState('country');
 	const [selectedCountry, setSelectedCountry] = useState('India');
-	const [selectedState, setSelectedState] = useState('');
-	const [selectedCity, setSelectedCity] = useState('');
+	const countryOptions = useMemo(() => [{ value: 'India', label: 'India' }], []);
+	const [selectedState, setSelectedState] = useState([]); // array of state values
+	const [selectedCity, setSelectedCity] = useState([]); // array of city values
 	const [filteredStoreIds, setFilteredStoreIds] = useState([]);
 	const [storeIdInput, setStoreIdInput] = useState([]);
-	const [pendingRows, setPendingRows] = useState([]);
+
 	const [addedRows, setAddedRows] = useState([]);
 	const [inactiveRows, setInactiveRows] = useState([]);
 	const [approvedRows, setApprovedRows] = useState([]);
@@ -78,6 +146,25 @@ function AssignContent() {
 	const [endDate, setEndDate] = useState("");
 	const [addedContent, setAddedContent] = useState([]);
 	const [currentDuration, setCurrentDuration] = useState("");
+
+	// Pre-fill form if redirected from Manage Playlists (edit/clone)
+	useEffect(() => {
+		if (location.state && location.state.playlist) {
+			const row = location.state.playlist;
+			setActiveTab('create');
+			setPlaylistName(location.state.action === 'clone' ? '' : row.playlistName || '');
+			setTerritoryType(row.territoryType || 'country');
+			setSelectedCountry(row.selectedCountry || 'India');
+			setSelectedState(row.selectedState || '');
+			setSelectedCity(row.selectedCity || '');
+			setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
+			setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
+			setAddedContent(row.selectedContent ? row.selectedContent.map(id => ({ id, title: id, type: 'unknown', duration: 5 })) : []);
+			setStartDate(row.startDate || todayStr);
+			setEndDate(row.endDate || '');
+			// Optionally set editingPlaylistId, setWasApproved, etc. if needed
+		}
+	}, [location.state]);
 	// Load content from IndexedDB on mount
 	React.useEffect(() => {
 		async function loadContent() {
@@ -89,31 +176,37 @@ function AssignContent() {
 
 	const stateOptions = useMemo(() => {
 		const states = Array.from(new Set(storeList.map(s => s.state)));
-		return states.sort();
+		return states.sort().map(state => ({ value: state, label: state }));
 	}, []);
 
 	const cityOptions = useMemo(() => {
-		if (!selectedState) return [];
-		const filtered = storeList.filter(s => s.state === selectedState);
-		const cityAreaPairs = filtered.map(s => ({ city: s.city, area: s.area }));
-		// Remove duplicates by city
+		if (!selectedState || selectedState.length === 0) return [];
+		// Only include cities from the selected states
+		const filtered = storeList.filter(s => selectedState.includes(s.state));
+		const cityAreaPairs = filtered.map(s => ({ city: s.city, area: s.area, state: s.state }));
+		// Remove duplicates by city+state
 		const unique = [];
 		const seen = new Set();
 		for (const pair of cityAreaPairs) {
-			if (!seen.has(pair.city)) {
+			const key = pair.city + '|' + pair.state;
+			if (!seen.has(key)) {
 				unique.push(pair);
-				seen.add(pair.city);
+				seen.add(key);
 			}
 		}
-		return unique.sort((a, b) => a.city.localeCompare(b.city));
+		return unique.sort((a, b) => a.city.localeCompare(b.city)).map(opt => ({ value: opt.city, label: opt.city + (opt.area ? ` (${opt.area})` : '') }));
 	}, [selectedState]);
 
 
-	// For dropdown: filter by state/city
+	// For dropdown: filter by selected states and cities (multi-select)
 	const storeOptions = useMemo(() => {
 		let filtered = storeList;
-		if (selectedState) filtered = filtered.filter(s => s.state === selectedState);
-		if (selectedCity) filtered = filtered.filter(s => s.city === selectedCity);
+		if (selectedState && selectedState.length > 0) {
+			filtered = filtered.filter(s => selectedState.includes(s.state));
+		}
+		if (selectedCity && selectedCity.length > 0) {
+			filtered = filtered.filter(s => selectedCity.includes(s.city));
+		}
 		return filtered.map(s => ({ id: s.id, name: s.name }));
 	}, [selectedState, selectedCity]);
 
@@ -164,10 +257,8 @@ function AssignContent() {
 					Playlist Assignment
 				</h2>
 			</div>
-			<Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-4">
-				<Tab eventKey="create" title="Create Playlist">
-					<div className="p-3">
-						<Form>
+				<div className="p-3">
+					<Form>
 							<Form.Group className="mb-3">
 								<Form.Label style={{ fontWeight: 'bold' }}>Playlist Name</Form.Label>
 								<Form.Control
@@ -218,22 +309,35 @@ function AssignContent() {
 										onChange={handleTerritoryChange}
 									/>
 								</div>
+								<div className="mt-2" style={{ maxWidth: 300 }}>
+									<Form.Label style={{ fontWeight: 'bold' }}>Select Country</Form.Label>
+									<Select
+										options={countryOptions}
+										value={countryOptions.find(opt => opt.value === selectedCountry) || countryOptions[0]}
+										onChange={selected => setSelectedCountry(selected ? selected.value : 'India')}
+										isClearable={false}
+										classNamePrefix="react-select"
+										styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
+										placeholder="Select country..."
+									/>
+								</div>
 							</Form.Group>
 
 							{/* COUNTRY: No dropdowns or store ID input */}
 							{territoryType === 'state' && (
 								<Form.Group className="mb-3">
-									<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
+									<Form.Label style={{ fontWeight: 'bold' }}>Select State(s)</Form.Label>
 									<Select
-										options={stateOptions.map(state => ({ value: state, label: state }))}
-										value={selectedState ? { value: selectedState, label: selectedState } : null}
+										options={stateOptions}
+										value={stateOptions.filter(opt => selectedState.includes(opt.value))}
 										onChange={selected => {
-											setSelectedState(selected ? selected.value : '');
-											setSelectedCity('');
+											setSelectedState(selected ? selected.map(opt => opt.value) : []);
+											setSelectedCity([]);
 											setFilteredStoreIds([]);
 											setStoreIdInput([]);
 										}}
-										placeholder="Select state..."
+										isMulti
+										placeholder="Select state(s)..."
 										isClearable
 										classNamePrefix="react-select"
 										styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
@@ -244,37 +348,39 @@ function AssignContent() {
 							{territoryType === 'city' && (
 								<>
 									<Form.Group className="mb-3">
-										<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
+										<Form.Label style={{ fontWeight: 'bold' }}>Select State(s)</Form.Label>
 										<Select
-											options={stateOptions.map(state => ({ value: state, label: state }))}
-											value={selectedState ? { value: selectedState, label: selectedState } : null}
+											options={stateOptions}
+											value={stateOptions.filter(opt => selectedState.includes(opt.value))}
 											onChange={selected => {
-												setSelectedState(selected ? selected.value : '');
-												setSelectedCity('');
+												setSelectedState(selected ? selected.map(opt => opt.value) : []);
+												setSelectedCity([]);
 												setFilteredStoreIds([]);
 												setStoreIdInput([]);
 											}}
-											placeholder="Select state..."
+											isMulti
+											placeholder="Select state(s)..."
 											isClearable
 											classNamePrefix="react-select"
 											styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
 										/>
 									</Form.Group>
-									{selectedState && (
+									{selectedState.length > 0 && (
 										<Form.Group className="mb-3">
-											<Form.Label style={{ fontWeight: 'bold' }}>Select City</Form.Label>
-											<Form.Select
-												value={selectedCity}
-												onChange={e => {
-													setSelectedCity(e.target.value);
+											<Form.Label style={{ fontWeight: 'bold' }}>Select City/Cities</Form.Label>
+											<Select
+												options={cityOptions}
+												value={cityOptions.filter(opt => selectedCity.includes(opt.value))}
+												onChange={selected => {
+													setSelectedCity(selected ? selected.map(opt => opt.value) : []);
 													setFilteredStoreIds([]);
 												}}
-											>
-												<option value="">-- Select City --</option>
-												{cityOptions.map(opt => (
-													<option key={opt.city} value={opt.city}>{opt.area}</option>
-												))}
-											</Form.Select>
+												isMulti
+												placeholder="Select city/cities..."
+												isClearable
+												classNamePrefix="react-select"
+												styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
+											/>
 										</Form.Group>
 									)}
 								</>
@@ -283,40 +389,42 @@ function AssignContent() {
 							{territoryType === 'store' && (
 								<>
 									<Form.Group className="mb-3">
-										<Form.Label style={{ fontWeight: 'bold' }}>Select State</Form.Label>
+										<Form.Label style={{ fontWeight: 'bold' }}>Select State(s)</Form.Label>
 										<Select
-											options={stateOptions.map(state => ({ value: state, label: state }))}
-											value={selectedState ? { value: selectedState, label: selectedState } : null}
+											options={stateOptions}
+											value={stateOptions.filter(opt => selectedState.includes(opt.value))}
 											onChange={selected => {
-												setSelectedState(selected ? selected.value : '');
-												setSelectedCity('');
+												setSelectedState(selected ? selected.map(opt => opt.value) : []);
+												setSelectedCity([]);
 												setFilteredStoreIds([]);
 												setStoreIdInput([]);
 											}}
-											placeholder="Select state..."
+											isMulti
+											placeholder="Select state(s)..."
 											isClearable
 											classNamePrefix="react-select"
 											styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
 										/>
 									</Form.Group>
-									{selectedState && (
+									{selectedState.length > 0 && (
 										<Form.Group className="mb-3">
-											<Form.Label style={{ fontWeight: 'bold' }}>Select City</Form.Label>
-											<Form.Select
-												value={selectedCity}
-												onChange={e => {
-													setSelectedCity(e.target.value);
+											<Form.Label style={{ fontWeight: 'bold' }}>Select City/Cities</Form.Label>
+											<Select
+												options={cityOptions}
+												value={cityOptions.filter(opt => selectedCity.includes(opt.value))}
+												onChange={selected => {
+													setSelectedCity(selected ? selected.map(opt => opt.value) : []);
 													setFilteredStoreIds([]);
 												}}
-											>
-												<option value="">-- Select City --</option>
-												{cityOptions.map(opt => (
-													<option key={opt.city} value={opt.city}>{opt.area}</option>
-												))}
-											</Form.Select>
+												isMulti
+												placeholder="Select city/cities..."
+												isClearable
+												classNamePrefix="react-select"
+												styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
+											/>
 										</Form.Group>
 									)}
-									{selectedState && selectedCity && (
+									{selectedState.length > 0 && selectedCity.length > 0 && (
 										<>
 											<Form.Group className="mb-3" style={{ position: 'relative' }}>
 												<Form.Label style={{ fontWeight: 'bold' }}>Select Stores (filtered)</Form.Label>
@@ -410,8 +518,15 @@ function AssignContent() {
 											// Set default duration for video or image
 											if (selected) {
 												const c = contentList.find(x => String(x.id) === String(selected.value));
-												if (c && c.type === 'video' && c.duration) setCurrentDuration(c.duration);
-												else setCurrentDuration(5);
+												// For video, try to get duration from slides if available
+					// removed unused variable videoDuration
+												if (c && c.type === 'video') {
+													// Always use top-level duration for video
+													if (c.duration) setCurrentDuration(Math.round(c.duration));
+													else setCurrentDuration(5);
+												} else {
+													setCurrentDuration(5);
+												}
 											} else {
 												setCurrentDuration("");
 											}
@@ -430,12 +545,32 @@ function AssignContent() {
 									<Form.Control
 										type="number"
 										min={1}
-										max={selectedContent ? (contentList.find(c => String(c.id) === String(selectedContent))?.type === 'video' ? contentList.find(c => String(c.id) === String(selectedContent))?.duration || 3600 : 3600) : 3600}
+										max={(() => {
+											if (!selectedContent) return 3600;
+											const c = contentList.find(c => String(c.id) === String(selectedContent));
+											if (c && c.type === 'video') {
+												return c.duration ? Math.round(c.duration) : 3600;
+											}
+											return 3600;
+										})()}
 										value={currentDuration}
 										onChange={e => {
-											let val = parseInt(e.target.value, 10);
+											let val = e.target.value;
+											// Allow empty string for controlled input
+											if (val === "") {
+												setCurrentDuration("");
+												return;
+											}
+											val = parseInt(val, 10);
 											if (isNaN(val) || val < 1) val = 1;
-											const max = selectedContent ? (contentList.find(c => String(c.id) === String(selectedContent))?.type === 'video' ? contentList.find(c => String(c.id) === String(selectedContent))?.duration || 3600 : 3600) : 3600;
+											let max = 3600;
+											if (selectedContent) {
+												const c = contentList.find(c => String(c.id) === String(selectedContent));
+												if (c && c.type === 'video' && c.duration) {
+													max = Math.round(c.duration);
+												}
+											}
+											// Clamp immediately
 											if (val > max) val = max;
 											setCurrentDuration(val);
 										}}
@@ -448,10 +583,22 @@ function AssignContent() {
 									className="w-100"
 									style={{ marginTop: 30 }}
 									variant="primary"
-									disabled={!selectedContent || !currentDuration}
+									disabled={(() => {
+										if (!selectedContent || !currentDuration) return true;
+										const c = contentList.find(x => String(x.id) === String(selectedContent));
+										if (c && c.type === 'video' && c.duration && Number(currentDuration) > Math.round(c.duration)) {
+											return true;
+										}
+										return false;
+									})()}
 									onClick={() => {
 										const c = contentList.find(x => String(x.id) === String(selectedContent));
 										if (!c) return;
+										if (c.type === 'video' && c.duration && Number(currentDuration) > Math.round(c.duration)) {
+											alert(`Duration for this video cannot exceed its length (${Math.round(c.duration)} seconds).`);
+											setCurrentDuration(Math.round(c.duration));
+											return;
+										}
 										setAddedContent(prev => [...prev, { id: c.id, title: c.title, type: c.type, duration: currentDuration }]);
 										setSelectedContent(null);
 										setCurrentDuration("");
@@ -563,103 +710,62 @@ function AssignContent() {
 							</div>
 						)}
 							<div className="d-flex gap-2">
-								{editingPlaylistId ? (
-									<Button
-										variant="success"
-										type="button"
-										   onClick={async () => {
-											   // Validate endDate is not before today
-											   const nowDate = new Date().toISOString().split('T')[0];
-											   if (endDate && endDate < nowDate) {
-												   alert('End date cannot be before today.');
-												   return;
-											   }
-											   let updatedPlaylist = {
-												   id: editingPlaylistId,
-												   playlistName,
-												   territoryType,
-												   selectedCountry,
-												   selectedState: selectedState || null,
-												   selectedCity: selectedCity || null,
-												   filteredStoreIds: filteredStoreIds.length ? [...filteredStoreIds] : null,
-												   storeIdInput: storeIdInput.length ? [...storeIdInput] : null,
-												   selectedContent: addedContent.length ? addedContent.map(item => item.id) : null,
-												   startDate,
-												   endDate,
-												   inactive: false,
-												   status: 'pending',
-											   };
-											   // Restrict endDate to max 1 year from startDate
-											   const maxEnd = new Date(startDate);
-											   maxEnd.setFullYear(maxEnd.getFullYear() + 1);
-											   // If date range is 1st to 4th, only allow editing before the 4th
-											   let is1to4 = false;
-											   if (startDate && endDate) {
-												   const startDay = Number(startDate.split('-')[2]);
-												   const endDay = Number(endDate.split('-')[2]);
-												   is1to4 = (startDay === 1 && endDay === 4);
-											   }
-											   const today = new Date().toISOString().split('T')[0];
-											   if (is1to4 && today > endDate) {
-												   // Move to inactive
-												   await updatePlaylistInDB(editingPlaylistId, { ...updatedPlaylist, inactive: true });
-												   setInactiveRows(prev => [...prev, { ...updatedPlaylist, inactive: true }]);
-												   setEditingPlaylistId(null);
-												   setShowAddAlert(false);
-												   setWasApproved(false);
-												   return;
-											   }
-											   if (new Date(endDate) > maxEnd) {
-												   // Move to inactive
-												   await updatePlaylistInDB(editingPlaylistId, { ...updatedPlaylist, inactive: true });
-												   setInactiveRows(prev => [...prev, { ...updatedPlaylist, inactive: true }]);
-												   setEditingPlaylistId(null);
-												   setShowAddAlert(false);
-												   setWasApproved(false);
-												   return;
-											   }
-											   // If editing an approved playlist, set status to pending
-											   if (wasApproved) {
-												   updatedPlaylist.status = 'pending';
-											   }
-											   await updatePlaylistInDB(editingPlaylistId, updatedPlaylist);
-											   setShowAddAlert(true);
-											   setEditingPlaylistId(null);
-											   setWasApproved(false);
-											   // Reload all lists from DB to ensure correct tab movement
-											   const all = await getAllPlaylistsFromDB();
-											   setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-											   setInactiveRows(all.filter(r => r.inactive));
-											   setApprovedRows(all.filter(r => r.status === 'approved'));
-											   setRejectedRows(all.filter(r => r.status === 'rejected'));
-											   // Clear fields after save
-											   setPlaylistName("");
-											   setTerritoryType("country");
-											   setSelectedState("");
-											   setSelectedCity("");
-											   setFilteredStoreIds([]);
-											   setStoreIdInput([]);
-											   setSelectedContent(null);
-											   setStartDate(todayStr);
-											   setEndDate("");
-											   setAddedContent([]);
-											   setTimeout(() => setShowAddAlert(false), 1000);
-										   }}
-										disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate}
-									>
-										Save Changes
-									</Button>
-								) : (
-									<Button
-										variant="secondary"
-										type="button"
-										onClick={async () => {
-											// Validate endDate is not before today
-											const nowDate = new Date().toISOString().split('T')[0];
-											if (endDate && endDate < nowDate) {
-												alert('End date cannot be before today.');
-												return;
-											}
+								<Button
+									variant={editingPlaylistId ? "success" : "primary"}
+									type="button"
+									onClick={async () => {
+										// Validate endDate is not before today
+										const nowDate = new Date().toISOString().split('T')[0];
+										if (endDate && endDate < nowDate) {
+											alert('End date cannot be before today.');
+											return;
+										}
+										// Restrict endDate to max 1 year from startDate
+										const maxEnd = new Date(startDate);
+										maxEnd.setFullYear(maxEnd.getFullYear() + 1);
+										if (endDate && new Date(endDate) > maxEnd) {
+											alert('End date cannot be more than 1 year from start date.');
+											return;
+										}
+										// If date range is 1st to 4th, only allow editing before the 4th
+										let is1to4 = false;
+										if (startDate && endDate) {
+											const startDay = Number(startDate.split('-')[2]);
+											const endDay = Number(endDate.split('-')[2]);
+											is1to4 = (startDay === 1 && endDay === 4);
+										}
+										const today = new Date().toISOString().split('T')[0];
+										if (is1to4 && today > endDate) {
+											alert('Cannot create/edit playlist for 1st-4th after the 4th.');
+											return;
+										}
+										if (editingPlaylistId) {
+											let updatedPlaylist = {
+												id: editingPlaylistId,
+												playlistName,
+												territoryType,
+												selectedCountry,
+												selectedState: selectedState || null,
+												selectedCity: selectedCity || null,
+												filteredStoreIds: filteredStoreIds.length ? [...filteredStoreIds] : null,
+												storeIdInput: storeIdInput.length ? [...storeIdInput] : null,
+												selectedContent: addedContent.length ? addedContent.map(item => item.id) : null,
+												startDate,
+												endDate,
+												inactive: false,
+												status: wasApproved ? 'pending' : 'pending',
+												regionNomenclature: getRegionNomenclature({
+													territoryType,
+													selectedCountry,
+													selectedState,
+													selectedCity,
+													filteredStoreIds,
+													storeIdInput
+												}),
+												createdAt: Date.now()
+											};
+											await updatePlaylistInDB(editingPlaylistId, updatedPlaylist);
+										} else {
 											let newPlaylist = {
 												playlistName,
 												territoryType,
@@ -673,569 +779,51 @@ function AssignContent() {
 												endDate,
 												inactive: false,
 												status: 'pending',
+												regionNomenclature: getRegionNomenclature({
+													territoryType,
+													selectedCountry,
+													selectedState,
+													selectedCity,
+													filteredStoreIds,
+													storeIdInput
+												}),
+												createdAt: Date.now()
 											};
-											setPendingRows(prev => [...prev, newPlaylist]);
-											setShowAddAlert(true);
-											// Clear fields after add
-											setPlaylistName("");
-											setTerritoryType("country");
-											setSelectedState("");
-											setSelectedCity("");
-											setFilteredStoreIds([]);
-											setStoreIdInput([]);
-											setSelectedContent(null);
-											setStartDate(todayStr);
-											setEndDate("");
-											setAddedContent([]);
-											setTimeout(() => setShowAddAlert(false), 1000);
-										}}
-										disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate}
-									>
-										Add
-									</Button>
-								)}
-								<Button variant="primary" type="button" disabled={pendingRows.length === 0}
-									onClick={async e => {
-										e.preventDefault();
-										// Save all pendingRows to DB
-										for (const row of pendingRows) {
-											await savePlaylistToDB(row);
+											await savePlaylistToDB(newPlaylist);
 										}
-										setPendingRows([]);
-										// Reload from DB
+										setShowAddAlert(true);
+										setEditingPlaylistId(null);
+										setWasApproved(false);
+										// Reload all lists from DB to ensure correct tab movement
 										const all = await getAllPlaylistsFromDB();
-										setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+										setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
 										setInactiveRows(all.filter(r => r.inactive));
 										setApprovedRows(all.filter(r => r.status === 'approved'));
 										setRejectedRows(all.filter(r => r.status === 'rejected'));
+										// Clear fields after save
+										setPlaylistName("");
+										setTerritoryType("country");
+										setSelectedState("");
+										setSelectedCity("");
+										setFilteredStoreIds([]);
+										setStoreIdInput([]);
+										setSelectedContent(null);
+										setStartDate(todayStr);
+										setEndDate("");
+										setAddedContent([]);
+										setTimeout(() => setShowAddAlert(false), 1000);
 										setActiveTab('list');
 									}}
+									disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate}
 								>
-									Create Playlist
+									{editingPlaylistId ? 'Save Changes' : 'Create Playlist'}
 								</Button>
 							</div>
 						</Form>
-						{/* Table of added rows (active only) */}
 						{showAddAlert && (
-							<Alert variant="success" className="mt-3">Playlist added to table!</Alert>
-						)}
-						{pendingRows.length > 0 && (
-							<div className="mt-4">
-								<h5>Playlists to be Created</h5>
-								<div style={{ overflowX: 'auto' }}>
-									<table className="table table-bordered table-sm align-middle">
-										<thead>
-											<tr>
-												<th>Playlist Name</th>
-												<th>Territory</th>
-												<th>State</th>
-												<th>City</th>
-												<th>Stores</th>
-												<th>Content</th>
-												<th>Start Date</th>
-												<th>End Date</th>
-												<th>Action</th>
-											</tr>
-										</thead>
-										<tbody>
-											{pendingRows.map((row, idx) => (
-												<tr key={idx}>
-													<td>{row.playlistName}</td>
-													<td>{row.territoryType}</td>
-													<td>{row.selectedState || '-'}</td>
-													<td>{row.selectedCity || '-'}</td>
-													<td>
-														{row.filteredStoreIds && row.filteredStoreIds.length > 0 && (
-															<>
-																<div><b>Filtered:</b> {row.filteredStoreIds.join(', ')}</div>
-															</>
-														)}
-														{row.storeIdInput && row.storeIdInput.length > 0 && (
-															<>
-																<div><b>IDs:</b> {row.storeIdInput.join(', ')}</div>
-															</>
-														)}
-														{(!row.filteredStoreIds || row.filteredStoreIds.length === 0) && (!row.storeIdInput || row.storeIdInput.length === 0) && '-'}
-													</td>
-													<td>{row.selectedContent
-														? row.selectedContent.map(cid => {
-															const c = contentList.find(mc => String(mc.id) === String(cid));
-															return c ? c.title : cid;
-														}).join(', ')
-														: '-'}</td>
-													<td>{row.startDate || '-'}</td>
-													<td>{row.endDate || '-'}</td>
-													<td>
-														<Button size="sm" variant="outline-danger" onClick={() => {
-															setPendingRows(pendingRows.filter((_, i) => i !== idx));
-														}}>Remove</Button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-							</div>
+							<Alert variant="success" className="mt-3">Playlist added!</Alert>
 						)}
 					</div>
-				</Tab>
-				<Tab eventKey="list" title="List of Playlists">
-					<div className="p-3">
-						   <div className="mb-2">
-							   <input
-								   type="text"
-								   className="form-control"
-								   placeholder="Search by name, region, or store..."
-								   value={searchList}
-								   onChange={e => setSearchList(e.target.value)}
-								   style={{ maxWidth: 320, display: 'inline-block' }}
-							   />
-						   </div>
-						   {addedRows.filter(row => {
-							   const q = searchList.toLowerCase();
-							   if (!q) return true;
-							   return (
-								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-							   );
-						   }).length > 0 ? (
-							   <div style={{ overflowX: 'auto' }}>
-								   <table className="table table-bordered table-sm align-middle">
-									<thead>
-										<tr>
-											<th>Playlist ID</th>
-											<th>Playlist Name</th>
-											<th>Region/Territory</th>
-											<th>Content Count</th>
-											<th>Action</th>
-										</tr>
-									</thead>
-									<tbody>
-										   {addedRows
-											   .filter(row => {
-												   const q = searchList.toLowerCase();
-												   if (!q) return true;
-												   return (
-													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-												   );
-											   })
-											   .map((row, idx) => (
-											<tr key={row.id || idx}>
-												<td>{idx + 1}</td>
-												<td>{row.playlistName}</td>
-												<td>
-													{row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
-													{row.selectedState ? ` / ${row.selectedState}` : ''}
-													{row.selectedCity ? ` / ${row.selectedCity}` : ''}
-												</td>
-												<td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-												<td>
-													   {(!row.status || row.status === 'pending') ? (
-														   <>
-															   <Button size="sm" variant="primary" className="me-2" onClick={async () => {
-																   // Only allow edit for pending playlists if today is before endDate, endDate is within 1 year from startDate, and (if 1st-4th) only before the 4th
-																   const today = new Date().toISOString().split('T')[0];
-																   const start = row.startDate;
-																   const end = row.endDate;
-																   let canEdit = true;
-																   if (!start || !end) canEdit = false;
-																   else {
-																	   // Check today <= endDate
-																	   if (today > end) canEdit = false;
-																	   // Check endDate <= startDate + 1 year
-																	   const maxEnd = new Date(start);
-																	   maxEnd.setFullYear(maxEnd.getFullYear() + 1);
-																	   if (new Date(end) > maxEnd) canEdit = false;
-																	   // If date range is 1st to 4th, only allow editing before the 4th
-																	   const startDay = Number(start.split('-')[2]);
-																	   const endDay = Number(end.split('-')[2]);
-																	   if (startDay === 1 && endDay === 4 && today > end) canEdit = false;
-																   }
-																   if (!canEdit) {
-																	   // Move to inactive
-																	   await updatePlaylistInDB(row.id, { ...row, inactive: true });
-																	   setAddedRows(prev => prev.filter(r => (r.id || r) !== (row.id || row)));
-																	   setInactiveRows(prev => [...prev, { ...row, inactive: true }]);
-																	   return;
-																   }
-																   // Set form fields for editing
-																   setActiveTab('create');
-																   setPlaylistName(row.playlistName);
-																   setTerritoryType(row.territoryType);
-																   setSelectedCountry(row.selectedCountry || 'India');
-																   setSelectedState(row.selectedState || '');
-																   setSelectedCity(row.selectedCity || '');
-																   setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
-																   setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
-																   setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
-																	   const c = contentList.find(mc => String(mc.id) === String(id));
-																	   return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
-																   }) : []);
-																   setStartDate(row.startDate || '');
-																   setEndDate(row.endDate || '');
-																   setEditingPlaylistId(row.id);
-															   }}>Edit</Button>
-															   <Button size="sm" variant="success" className="ms-2" onClick={async () => {
-																   await updatePlaylistInDB(row.id, { status: 'approved' });
-																   // Reload all lists from DB to ensure correct tab movement
-																   const all = await getAllPlaylistsFromDB();
-																   setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-																   setInactiveRows(all.filter(r => r.inactive));
-																   setApprovedRows(all.filter(r => r.status === 'approved'));
-																   setRejectedRows(all.filter(r => r.status === 'rejected'));
-															   }}>Approve</Button>
-															   <Button size="sm" variant="danger" className="ms-2" onClick={async () => {
-																   await updatePlaylistInDB(row.id, { status: 'rejected' });
-																   // Reload all lists from DB to ensure correct tab movement
-																   const all = await getAllPlaylistsFromDB();
-																   setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-																   setInactiveRows(all.filter(r => r.inactive));
-																   setApprovedRows(all.filter(r => r.status === 'approved'));
-																   setRejectedRows(all.filter(r => r.status === 'rejected'));
-															   }}>Reject</Button>
-														   </>
-													   ) : (
-														   <Button size="sm" variant="outline-secondary" disabled>Edit</Button>
-													   )}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<Alert variant="secondary">No playlists created yet.</Alert>
-						)}
-					</div>
-				</Tab>
-				   <Tab eventKey="approved" title="Approved">
-					   <div className="p-3">
-						   <div className="mb-2">
-							   <input
-								   type="text"
-								   className="form-control"
-								   placeholder="Search by name, region, or store..."
-								   value={searchApproved}
-								   onChange={e => setSearchApproved(e.target.value)}
-								   style={{ maxWidth: 320, display: 'inline-block' }}
-							   />
-						   </div>
-						   {approvedRows.filter(row => {
-							   const q = searchApproved.toLowerCase();
-							   if (!q) return true;
-							   return (
-								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-							   );
-						   }).length > 0 ? (
-							   <div style={{ overflowX: 'auto' }}>
-								   <table className="table table-bordered table-sm align-middle">
-									   <thead>
-										   <tr>
-											   <th>Playlist ID</th>
-											   <th>Playlist Name</th>
-											   <th>Region/Territory</th>
-											   <th>Content Count</th>
-											   <th>Action</th>
-										   </tr>
-									   </thead>
-									   <tbody>
-										   {approvedRows
-											   .filter(row => !row.inactive)
-											   .filter(row => {
-												   const q = searchApproved.toLowerCase();
-												   if (!q) return true;
-												   return (
-													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-												   );
-											   })
-											   .map((row, idx) => (
-											   <tr key={row.id || idx} style={row.inactive ? { opacity: 0.6, background: '#f8d7da' } : {}}>
-												   <td>{idx + 1}</td>
-												   <td>{row.playlistName}</td>
-												   <td>
-													   {row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
-													   {row.selectedState ? ` / ${row.selectedState}` : ''}
-													   {row.selectedCity ? ` / ${row.selectedCity}` : ''}
-												   </td>
-												   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-												   <td>
-													   {row.inactive ? (
-														   <span className="badge bg-danger">Disabled</span>
-													   ) : (
-														   <>
-															   <Button size="sm" variant="primary" className="me-2" onClick={async () => {
-																   setActiveTab('create');
-																   setPlaylistName(row.playlistName);
-																   setTerritoryType(row.territoryType);
-																   setSelectedCountry(row.selectedCountry || 'India');
-																   setSelectedState(row.selectedState || '');
-																   setSelectedCity(row.selectedCity || '');
-																   setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
-																   setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
-																   setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
-																	   const c = contentList.find(mc => String(mc.id) === String(id));
-																	   return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
-																   }) : []);
-																   setStartDate(row.startDate || '');
-																   setEndDate(row.endDate || '');
-																   setEditingPlaylistId(row.id);
-																   setWasApproved(true);
-															   }}>Edit</Button>
-															   <Button size="sm" variant="danger" className="ms-2" onClick={() => {
-																   setDisableTargetId(row.id);
-																   setShowDisableModal(true);
-															   }}>Disable</Button>
-															{/* Disable Confirmation Modal */}
-															{showDisableModal && (
-																<div className="modal fade show" style={{display:'block', background:'rgba(0,0,0,0.5)'}} tabIndex="-1">
-																	<div className="modal-dialog" style={{maxWidth: 400, margin: 'auto'}}>
-																		<div className="modal-content">
-																			<div className="modal-header">
-																				<h5 className="modal-title text-danger">Disable Playlist</h5>
-																				<button type="button" className="btn-close" onClick={() => setShowDisableModal(false)}></button>
-																			</div>
-																			<div className="modal-body">
-																				<p>Are you sure you want to <b>disable</b> this playlist? This action cannot be undone and the playlist will be moved to Inactive Playlists.</p>
-																			</div>
-																			<div className="modal-footer">
-																				<Button variant="secondary" onClick={() => setShowDisableModal(false)}>Cancel</Button>
-																				<Button variant="danger" onClick={async () => {
-																					await updatePlaylistInDB(disableTargetId, { inactive: true });
-																					// Move to inactive: reload all lists
-																					const all = await getAllPlaylistsFromDB();
-																					setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-																					setInactiveRows(all.filter(r => r.inactive));
-																					setApprovedRows(all.filter(r => r.status === 'approved'));
-																					setRejectedRows(all.filter(r => r.status === 'rejected'));
-																					setShowDisableModal(false);
-																					setDisableTargetId(null);
-																				}}>Disable</Button>
-																			</div>
-																		</div>
-																	</div>
-																</div>
-															)}
-														   </>
-													   )}
-												   </td>
-											   </tr>
-										   ))}
-									   </tbody>
-								   </table>
-							   </div>
-						   ) : (
-							   <Alert variant="secondary">No approved playlists.</Alert>
-						   )}
-					   </div>
-				   </Tab>
-				<Tab eventKey="rejected" title="Rejected">
-					<div className="p-3">
-						{rejectedRows.length > 0 ? (
-							<div style={{ overflowX: 'auto' }}>
-								<div className="mb-2" style={{ maxWidth: 320 }}>
-											   <input
-												   type="text"
-												   className="form-control"
-												   placeholder="Search by name, region, or store..."
-												   value={searchRejected}
-												   onChange={e => setSearchRejected(e.target.value)}
-											   />
-										   </div>
-
-								<table className="table table-bordered table-sm align-middle">
-									<thead>
-										<tr>
-											<th>Playlist ID</th>
-											<th>Playlist Name</th>
-											<th>Region/Territory</th>
-											<th>Content Count</th>
-											<th>Action</th>
-										</tr>
-									</thead>
-									<tbody>
-										   {rejectedRows
-											   .filter(row => {
-												   const q = searchRejected.toLowerCase();
-												   if (!q) return true;
-												   return (
-													   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-													   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-													   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-													   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-													   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-													   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-												   );
-											   })
-											   .map((row, idx) => (
-											   <tr key={row.id || idx}>
-												   <td>{idx + 1}</td>
-												   <td>{row.playlistName}</td>
-												   <td>
-													   {row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)}
-													   {row.selectedState ? ` / ${row.selectedState}` : ''}
-													   {row.selectedCity ? ` / ${row.selectedCity}` : ''}
-												   </td>
-												   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-												   <td>
-													   <Button size="sm" variant="outline-primary" onClick={() => {
-														   setActiveTab('create');
-														   setPlaylistName("");
-														   setTerritoryType(row.territoryType);
-														   setSelectedCountry(row.selectedCountry || 'India');
-														   setSelectedState(row.selectedState || '');
-														   setSelectedCity(row.selectedCity || '');
-														   setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
-														   setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
-														   setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
-															   const c = contentList.find(mc => String(mc.id) === String(id));
-															   return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
-														   }) : []);
-														   setStartDate(todayStr);
-														   setEndDate("");
-														   setEditingPlaylistId(null);
-														   setWasApproved(false);
-													   }}>Clone</Button>
-												   </td>
-											   </tr>
-										   ))}
-									</tbody>
-								</table>
-							</div>
-						) : (
-							<Alert variant="secondary">No rejected playlists.</Alert>
-						)}
-					</div>
-				</Tab>
-				<Tab eventKey="inactive" title="Inactive Playlists">
-					<div className="p-3">
-						   <div className="mb-2">
-							   <input
-								   type="text"
-								   className="form-control"
-								   placeholder="Search by name, region, or store..."
-								   value={searchInactive}
-								   onChange={e => setSearchInactive(e.target.value)}
-								   style={{ maxWidth: 320, display: 'inline-block' }}
-							   />
-						   </div>
-						   {inactiveRows.filter(row => {
-							   const q = searchInactive.toLowerCase();
-							   if (!q) return true;
-							   return (
-								   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-								   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-								   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-								   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-								   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-								   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-							   );
-						   }).length > 0 ? (
-							   <div>
-								   <div style={{ overflowX: 'auto' }}>
-									   <table className="table table-bordered table-sm align-middle">
-										<thead>
-											<tr>
-												<th>Playlist Name</th>
-												<th>Territory</th>
-												<th>State</th>
-												<th>City</th>
-												<th>Stores</th>
-												<th>Content</th>
-												<th>Start Date</th>
-												<th>End Date</th>
-												<th>Action</th>
-											</tr>
-										</thead>
-										<tbody>
-											   {inactiveRows
-												   .filter(row => {
-													   const q = searchInactive.toLowerCase();
-													   if (!q) return true;
-													   return (
-														   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-														   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-														   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-														   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-														   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-														   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-													   );
-												   })
-												   .map((row, idx) => (
-												<tr key={idx}>
-													<td>{row.playlistName}</td>
-													<td>{row.territoryType}</td>
-													<td>{row.selectedState || '-'}</td>
-													<td>{row.selectedCity || '-'}</td>
-													<td>
-														{row.filteredStoreIds && row.filteredStoreIds.length > 0 && (
-															<>
-																<div><b>Filtered:</b> {row.filteredStoreIds.join(', ')}</div>
-															</>
-														)}
-														{row.storeIdInput && row.storeIdInput.length > 0 && (
-															<>
-																<div><b>IDs:</b> {row.storeIdInput.join(', ')}</div>
-															</>
-														)}
-														{(!row.filteredStoreIds || row.filteredStoreIds.length === 0) && (!row.storeIdInput || row.storeIdInput.length === 0) && '-'}
-													</td>
-													<td>{row.selectedContent
-														? row.selectedContent.map(cid => {
-															const c = contentList.find(mc => String(mc.id) === String(cid));
-															return c ? c.title : cid;
-														}).join(', ')
-														: '-'}</td>
-													<td>{row.startDate || '-'}</td>
-													<td>{row.endDate || '-'}</td>
-													<td>
-														<Button size="sm" variant="outline-primary" onClick={() => {
-															setActiveTab('create');
-															setPlaylistName(row.playlistName);
-															setTerritoryType(row.territoryType);
-															setSelectedCountry(row.selectedCountry || 'India');
-															setSelectedState(row.selectedState || '');
-															setSelectedCity(row.selectedCity || '');
-															setFilteredStoreIds(row.filteredStoreIds ? [...row.filteredStoreIds] : []);
-															setStoreIdInput(row.storeIdInput ? [...row.storeIdInput] : []);
-															setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
-																const c = contentList.find(mc => String(mc.id) === String(id));
-																return c ? { id: c.id, title: c.title, type: c.type, duration: 5 } : { id, title: id, type: 'unknown', duration: 5 };
-															}) : []);
-															setStartDate(row.startDate || '');
-															setEndDate(row.endDate || '');
-														}}>Clone</Button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-							</div>
-						) : (
-							<Alert variant="secondary">No inactive playlists.</Alert>
-						)}
-					</div>
-				</Tab>
-			</Tabs>
 		</div>
 	);
 }

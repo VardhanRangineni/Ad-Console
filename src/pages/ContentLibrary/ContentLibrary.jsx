@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert } from 'react-bootstrap';
 import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
@@ -13,15 +14,28 @@ function ContentLibrary() {
   const [newImages, setNewImages] = useState([]);
   const [newVideos, setNewVideos] = useState([]);
   const [addError, setAddError] = useState('');
+  const [mediaTypeError, setMediaTypeError] = useState('');
   const [deviceResolutions, setDeviceResolutions] = useState({ landscape: [], portrait: [] });
   const [mediaResolutions, setMediaResolutions] = useState([]);
   const [editNewFiles, setEditNewFiles] = useState([]);
-  const [editError, setEditError] = useState([]);
+  const [editError, setEditError] = useState('');
+  const [editMediaTypeError, setEditMediaTypeError] = useState('');
   const [editMediaResolutions, setEditMediaResolutions] = useState([]);
   const [disableConfirmId, setDisableConfirmId] = useState(null);
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [previewAnchor, setPreviewAnchor] = useState(null);
+  const [viewContent, setViewContent] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+
+  const handleRemoveSlide = (idx) => {
+    if (!editContent || !editContent.slides) return;
+    const updatedSlides = editContent.slides.filter((_, i) => i !== idx);
+    const updated = { ...editContent, slides: updatedSlides };
+    setEditContent(updated);
+    updateContent(updated);
+    getAllContent().then(setContentList);
+  };
 
   useEffect(() => {
     async function loadContent() {
@@ -111,11 +125,39 @@ function ContentLibrary() {
   // Handle adding new images/videos in edit modal
   const handleEditAddFiles = (e) => {
     const files = Array.from(e.target.files);
-    setEditNewFiles(files);
+    const images = files.filter(f => f.type.startsWith('image/'));
+    const videos = files.filter(f => f.type.startsWith('video/'));
+    // Check if existing slides are all images or all videos
+    const existingSlides = (editContent && editContent.slides) ? editContent.slides : [];
+    const hasExistingImages = existingSlides.some(s => s.type === 'image');
+    const hasExistingVideos = existingSlides.some(s => s.type === 'video');
+    if ((hasExistingImages && videos.length > 0) || (hasExistingVideos && images.length > 0)) {
+      setEditMediaTypeError('Cannot add images if videos are already present, or videos if images are present.');
+      setEditNewFiles([]);
+      return;
+    }
+    if (images.length > 0 && videos.length > 0) {
+      setEditMediaTypeError('You can only upload images or videos, not both.');
+      setEditNewFiles([]);
+    } else {
+      setEditMediaTypeError('');
+      setEditNewFiles(files);
+    }
   };
 
   const handleEditSaveFiles = async () => {
+    if (editMediaTypeError) {
+      setEditError(editMediaTypeError);
+      return;
+    }
     if (!editContent || editNewFiles.length === 0) return;
+    // Only allow one type
+    const images = editNewFiles.filter(f => f.type.startsWith('image/'));
+    const videos = editNewFiles.filter(f => f.type.startsWith('video/'));
+    if (images.length > 0 && videos.length > 0) {
+      setEditError('You can only upload images or videos, not both.');
+      return;
+    }
     // Validation: check if all images match available device resolutions
     if (editMediaResolutions.length > 0 && deviceResolutions) {
       const allDeviceSizes = [
@@ -131,20 +173,43 @@ function ContentLibrary() {
         return;
       }
     }
-    const safeRead = (file, type) => {
+    // Save width/height and dataUrl for each slide
+    const safeRead = (file, type, width, height, dataUrl) => {
       return new Promise(resolve => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(type === 'image'
-          ? { type: 'image', data: reader.result }
-          : { type: 'video', data: reader.result, name: file.name });
+        reader.onloadend = () => resolve({ type, name: file.name, data: reader.result, width, height, dataUrl });
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
       });
     };
-    const images = editNewFiles.filter(f => f.type.startsWith('image/'));
-    const videos = editNewFiles.filter(f => f.type.startsWith('video/'));
-    const imagePromises = images.map(file => safeRead(file, 'image'));
-    const videoPromises = videos.map(file => safeRead(file, 'video'));
+    // Get width/height and dataUrl from editMediaResolutions
+    const getResolution = (file, type) => {
+      const found = editMediaResolutions.find(m => m.name === file.name && m.type === type);
+      return found ? { width: found.width, height: found.height, dataUrl: found.dataUrl } : { width: undefined, height: undefined, dataUrl: undefined };
+    };
+    const imagePromises = images.map(file => {
+      const { width, height, dataUrl } = getResolution(file, 'image');
+      return safeRead(file, 'image', width, height, dataUrl);
+    });
+    const videoPromises = videos.map(file => {
+      const { width, height, dataUrl } = getResolution(file, 'video');
+      return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const data = reader.result;
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          video.onloadedmetadata = () => {
+            const duration = video.duration;
+            resolve({ type: 'video', name: file.name, data, width, height, dataUrl, duration });
+          };
+          video.onerror = () => resolve({ type: 'video', name: file.name, data, width, height, dataUrl });
+          video.src = data;
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+    });
     const mediaArr = await Promise.all([...imagePromises, ...videoPromises]);
     const validMedia = mediaArr.filter(Boolean);
     if (validMedia.length === 0) {
@@ -157,6 +222,7 @@ function ContentLibrary() {
     setEditContent(updated);
     setEditNewFiles([]);
     setEditError('');
+    setEditMediaTypeError('');
     const all = await getAllContent();
     setContentList(all);
   };
@@ -176,13 +242,14 @@ function ContentLibrary() {
               img.src = e.target.result;
             } else if (file.type.startsWith('video/')) {
               const video = document.createElement('video');
+              video.preload = 'metadata';
               video.onloadedmetadata = () => {
-                resolve({ name: file.name, type: 'video', width: video.videoWidth, height: video.videoHeight });
+                resolve({ name: file.name, type: 'video', width: video.videoWidth, height: video.videoHeight, dataUrl: e.target.result, duration: video.duration });
               };
-              video.onerror = () => resolve({ name: file.name, type: 'video', width: '-', height: '-' });
+              video.onerror = () => resolve({ name: file.name, type: 'video', width: '-', height: '-', dataUrl: e.target.result, duration: '-' });
               video.src = e.target.result;
             } else {
-              resolve({ name: file.name, type: 'other', width: '-', height: '-' });
+              resolve({ name: file.name, type: 'other', width: '-', height: '-', dataUrl: e.target.result });
             }
           };
           reader.readAsDataURL(file);
@@ -203,18 +270,18 @@ function ContentLibrary() {
           reader.onload = e => {
             if (file.type.startsWith('image/')) {
               const img = new window.Image();
-              img.onload = () => resolve({ name: file.name, type: 'image', width: img.width, height: img.height });
-              img.onerror = () => resolve({ name: file.name, type: 'image', width: '-', height: '-' });
+              img.onload = () => resolve({ name: file.name, type: 'image', width: img.width, height: img.height, dataUrl: e.target.result });
+              img.onerror = () => resolve({ name: file.name, type: 'image', width: '-', height: '-', dataUrl: e.target.result });
               img.src = e.target.result;
             } else if (file.type.startsWith('video/')) {
               const video = document.createElement('video');
               video.onloadedmetadata = () => {
-                resolve({ name: file.name, type: 'video', width: video.videoWidth, height: video.videoHeight });
+                resolve({ name: file.name, type: 'video', width: video.videoWidth, height: video.videoHeight, dataUrl: e.target.result });
               };
-              video.onerror = () => resolve({ name: file.name, type: 'video', width: '-', height: '-' });
+              video.onerror = () => resolve({ name: file.name, type: 'video', width: '-', height: '-', dataUrl: e.target.result });
               video.src = e.target.result;
             } else {
-              resolve({ name: file.name, type: 'other', width: '-', height: '-' });
+              resolve({ name: file.name, type: 'other', width: '-', height: '-', dataUrl: e.target.result });
             }
           };
           reader.readAsDataURL(file);
@@ -250,16 +317,32 @@ function ContentLibrary() {
     const files = Array.from(e.target.files);
     const images = files.filter(f => f.type.startsWith('image/'));
     const videos = files.filter(f => f.type.startsWith('video/'));
-    setNewImages(images);
-    setNewVideos(videos);
+    if (images.length > 0 && videos.length > 0) {
+      setMediaTypeError('You can only upload images or videos, not both.');
+      setNewImages([]);
+      setNewVideos([]);
+    } else {
+      setMediaTypeError('');
+      setNewImages(images);
+      setNewVideos(videos);
+    }
   };
   const handleAddContent = async () => {
+    if (mediaTypeError) {
+      setAddError(mediaTypeError);
+      return;
+    }
     if (newContentName.trim() === '') {
       setAddError('Content name is required.');
       return;
     }
     if (newImages.length === 0 && newVideos.length === 0) {
       setAddError('At least one image or video is required.');
+      return;
+    }
+    // Only allow one type
+    if (newImages.length > 0 && newVideos.length > 0) {
+      setAddError('You can only upload images or videos, not both.');
       return;
     }
     // Validation: check if all images match available device resolutions
@@ -278,27 +361,55 @@ function ContentLibrary() {
       }
     }
     setAddError('');
-    // Prepare content object with images as dataUrl
+    // Prepare content object with images as dataUrl and save width/height
     const id = Date.now();
+    // Map file name to resolution info from mediaResolutions
+    const getResolution = (file, type) => {
+      const found = mediaResolutions.find(m => m.name === file.name && m.type === type);
+      return found ? { width: found.width, height: found.height } : { width: undefined, height: undefined };
+    };
     const slides = await Promise.all([
       ...newImages.map(file => new Promise(resolve => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve({ type: 'image', name: file.name, data: reader.result });
+        reader.onloadend = () => {
+          const { width, height } = getResolution(file, 'image');
+          resolve({ type: 'image', name: file.name, data: reader.result, width, height });
+        };
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
       })),
       ...newVideos.map(file => new Promise(resolve => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve({ type: 'video', name: file.name, data: reader.result });
+        reader.onloadend = () => {
+          const { width, height } = getResolution(file, 'video');
+          const dataUrl = reader.result;
+          // Extract video duration
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          video.onloadedmetadata = () => {
+            const duration = video.duration;
+            resolve({ type: 'video', name: file.name, data: dataUrl, width, height, duration });
+          };
+          video.onerror = () => resolve({ type: 'video', name: file.name, data: dataUrl, width, height });
+          video.src = dataUrl;
+        };
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
       }))
     ]);
+    const slidesFiltered = slides.filter(Boolean);
+    // If video, set top-level duration for compatibility
+    let duration = undefined;
+    if (slidesFiltered.length > 0 && slidesFiltered[0].type === 'video') {
+      const firstVideo = slidesFiltered.find(s => s.type === 'video' && s.duration);
+      if (firstVideo && firstVideo.duration) duration = Math.round(firstVideo.duration);
+    }
     const newContent = {
       id,
       title: newContentName,
       active: true,
-      slides: slides.filter(Boolean)
+      slides: slidesFiltered,
+      ...(duration ? { duration } : {})
     };
     await addContent(newContent);
     const all = await getAllContent();
@@ -308,10 +419,11 @@ function ContentLibrary() {
     setNewImages([]);
     setNewVideos([]);
     setAddError('');
+    setMediaTypeError('');
   };
 
   return (
-    <>
+    <div>
       <div className="container-fluid py-4 content-library bg-light min-vh-100">
         <div className="row mb-4">
           <div className="col-12 d-flex justify-content-between align-items-center">
@@ -344,7 +456,14 @@ function ContentLibrary() {
                         <tr><td colSpan={4} className="text-center text-muted">No content found</td></tr>
                       ) : filteredContent.map(content => (
                         <tr key={content.id}>
-                          <td>{content.id}</td>
+                          <td>
+                            <span
+                              style={{ color: '#007bff', textDecoration: 'underline', cursor: 'pointer' }}
+                              onClick={() => { setViewContent(content); setShowViewModal(true); }}
+                            >
+                              {content.id}
+                            </span>
+                          </td>
                           <td>{content.title}</td>
                           <td>{content.slides ? content.slides.length : 1}</td>
                           <td>
@@ -403,7 +522,7 @@ function ContentLibrary() {
         {/* Edit Modal */}
         <Modal show={showEditModal} onHide={closeEditModal} size="xl">
           <Modal.Header closeButton>
-            <Modal.Title>View Images</Modal.Title>
+            <Modal.Title>Edit Content</Modal.Title>
           </Modal.Header>
           <Modal.Body>
             {editError && <div className="alert alert-danger">{editError}</div>}
@@ -411,19 +530,36 @@ function ContentLibrary() {
               <>
                 <div className="d-flex flex-wrap gap-3 mb-3">
                   {(editContent.slides || [editContent.fileUrl]).map((media, idx) => (
-                    <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8 }}>
+                    <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, position: 'relative' }}>
                       {media.type === 'video' ? (
                         <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
                       ) : (
                         <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
                       )}
                       <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
+                      {typeof media.width === 'number' && typeof media.height === 'number' && (
+                        <div className="text-center text-muted" style={{ fontSize: '0.95em' }}>
+                          {`Size: ${media.width} x ${media.height}`}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-sm btn-danger position-absolute"
+                        style={{ top: 4, right: 4, zIndex: 2 }}
+                        title="Remove"
+                        onClick={() => handleRemoveSlide(idx)}
+                      >
+                        &times;
+                      </button>
                     </div>
                   ))}
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Add More Images or Videos</label>
                   <input type="file" accept="image/*,video/*" multiple onChange={handleEditAddFiles} className="form-control" />
+                  <div className="text-muted" style={{ fontSize: '0.95em' }}>
+                    You can select multiple images or multiple videos, but not both at the same time.
+                  </div>
+                  {editMediaTypeError && <div className="text-danger mt-1">{editMediaTypeError}</div>}
                   {editMediaResolutions.length > 0 && (
                     <div className="mt-2">
                       <strong>Selected Media Resolutions:</strong>
@@ -435,29 +571,81 @@ function ContentLibrary() {
                             <th>Width</th>
                             <th>Height</th>
                             <th>Orientation</th>
+                            <th>Duration (s)</th>
                           </tr>
                         </thead>
                         <tbody>
                           {editMediaResolutions.map((m, i) => (
                             <tr key={i}>
-                              <td>{m.name}</td>
+                              <td>
+                                {m.type === 'image' && m.dataUrl ? (
+                                  <span
+                                    style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                    onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'image' })}
+                                    onMouseLeave={() => setPreviewAnchor(null)}
+                                    onClick={() => setPreviewImage(m.dataUrl)}
+                                  >
+                                    {m.name}
+                                  </span>
+                                ) : m.type === 'video' && m.dataUrl ? (
+                                  <span
+                                    style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                    onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'video' })}
+                                    onMouseLeave={() => setPreviewAnchor(null)}
+                                  >
+                                    {m.name}
+                                  </span>
+                                ) : m.name}
+                              </td>
                               <td>{m.type}</td>
                               <td>{m.width}</td>
                               <td>{m.height}</td>
                               <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
+                              <td>{m.type === 'video' && m.duration ? Math.round(m.duration) : '-'}</td>
                             </tr>
                           ))}
                         </tbody>
                       </Table>
                     </div>
                   )}
-                  <button className="btn btn-primary mt-2" onClick={handleEditSaveFiles} disabled={editNewFiles.length === 0}>Add to Content</button>
+                  <button className="btn btn-primary mt-2" onClick={handleEditSaveFiles} disabled={editNewFiles.length === 0 || !!editMediaTypeError}>Add to Content</button>
                 </div>
               </>
             )}
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={closeEditModal}>Close</Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* View Content Modal */}
+        <Modal show={showViewModal} onHide={() => setShowViewModal(false)} size="xl">
+          <Modal.Header closeButton>
+            <Modal.Title>View Content</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {viewContent && (
+              <div className="d-flex flex-wrap gap-3 mb-3">
+                {(viewContent.slides || [viewContent.fileUrl]).map((media, idx) => (
+                  <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, position: 'relative' }}>
+                    {media.type === 'video' ? (
+                      <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
+                    ) : (
+                      <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
+                    )}
+                    <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
+                    {typeof media.width === 'number' && typeof media.height === 'number' && (
+                      <div className="text-center text-muted" style={{ fontSize: '0.95em' }}>
+                        {`Size: ${media.width} x ${media.height}`}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowViewModal(false)}>Close</Button>
           </Modal.Footer>
         </Modal>
         {/* Add Content Modal */}
@@ -486,8 +674,9 @@ function ContentLibrary() {
                   onChange={handleAddMedia}
                 />
                 <Form.Text className="text-muted">
-                  You can select multiple images and videos.
+                  You can select multiple images or multiple videos, but not both at the same time.
                 </Form.Text>
+                {mediaTypeError && <div className="text-danger mt-1">{mediaTypeError}</div>}
               </Form.Group>
               {mediaResolutions.length > 0 && (
                 <div className="mb-3">
@@ -500,6 +689,7 @@ function ContentLibrary() {
                         <th>Width</th>
                         <th>Height</th>
                         <th>Orientation</th>
+                        <th>Duration (s)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -509,9 +699,17 @@ function ContentLibrary() {
                             {m.type === 'image' && m.dataUrl ? (
                               <span
                                 style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
-                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl })}
+                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'image' })}
                                 onMouseLeave={() => setPreviewAnchor(null)}
                                 onClick={() => setPreviewImage(m.dataUrl)}
+                              >
+                                {m.name}
+                              </span>
+                            ) : m.type === 'video' && m.dataUrl ? (
+                              <span
+                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'video' })}
+                                onMouseLeave={() => setPreviewAnchor(null)}
                               >
                                 {m.name}
                               </span>
@@ -521,6 +719,7 @@ function ContentLibrary() {
                           <td>{m.width}</td>
                           <td>{m.height}</td>
                           <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
+                          <td>{m.type === 'video' && m.duration ? Math.round(m.duration) : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -542,7 +741,7 @@ function ContentLibrary() {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={closeAddModal}>Cancel</Button>
-            <Button variant="primary" onClick={handleAddContent}>Add</Button>
+            <Button variant="primary" onClick={handleAddContent} disabled={!!mediaTypeError}>Add</Button>
           </Modal.Footer>
         </Modal>
         {/* Disable Warning Modal */}
@@ -577,7 +776,11 @@ function ContentLibrary() {
               zIndex: 2000
             }}
           >
-            <img src={previewAnchor.url} alt="preview" style={{ maxWidth: 120, maxHeight: 80 }} />
+            {previewAnchor.type === 'image' ? (
+              <img src={previewAnchor.url} alt="preview" style={{ maxWidth: 120, maxHeight: 80 }} />
+            ) : previewAnchor.type === 'video' ? (
+              <video src={previewAnchor.url} style={{ maxWidth: 160, maxHeight: 100 }} autoPlay loop muted playsInline />
+            ) : null}
           </div>
         )}
         {/* Full image modal on click */}
@@ -587,7 +790,7 @@ function ContentLibrary() {
           </Modal.Body>
         </Modal>
       </div>
-    </>
+    </div>
   );
 }
 
