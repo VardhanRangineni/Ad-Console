@@ -6,7 +6,7 @@ import './AsideBar.css';
 function AsideBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [openMenus, setOpenMenus] = useState({});
 
   // Navigation structure with submenus for Playlists and Devices
@@ -52,7 +52,7 @@ function AsideBar() {
   };
 
   return (
-    <aside className={`aside-bar${collapsed ? ' collapsed' : ''}`}>  
+    <aside className={`aside-bar${collapsed ? ' closed' : ' open'}`}>  
       <div className="aside-header">
         <span className="brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => setCollapsed(c => !c)}>
           <i className="bi bi-display me-2"></i>
@@ -108,6 +108,50 @@ function AsideBar() {
           )
         ))}
       </nav>
+      <footer
+        className="aside-bar-footer"
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          width: '100%',
+          textAlign: 'center',
+          padding: 0,
+          background: 'rgba(0,0,0,0.08)',
+          minHeight: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <button
+          style={{
+            background: '#222',
+            border: 'none',
+            borderRadius: 0,
+            cursor: 'pointer',
+            fontSize: 28,
+            color: '#bdbdbd',
+            outline: 'none',
+            transition: 'color 0.2s',
+            width: '100%',
+            height: 56,
+            margin: 0,
+            boxShadow: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          onClick={() => setCollapsed(c => !c)}
+          aria-label={collapsed ? 'Open sidebar' : 'Close sidebar'}
+        >
+          {collapsed ? (
+            <i className="bi bi-chevron-right" style={{ margin: 0, padding: 0 }}></i>
+          ) : (
+            <i className="bi bi-chevron-left" style={{ margin: 0, padding: 0 }}></i>
+          )}
+        </button>
+      </footer>
     </aside>
   );
 }

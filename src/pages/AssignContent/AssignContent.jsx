@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import AsyncSelect from 'react-select/async';
-import { Tabs, Tab, Button, Form, Alert, Table } from 'react-bootstrap';
+import { Button, Form, Alert, Table } from 'react-bootstrap';
 import { storeList } from '../../data/storeList';
 
 import { getAllContent, getDB } from '../../services/indexeddb';
@@ -52,10 +52,6 @@ function AssignContent() {
 			// fallback: first 3 letters of city
 			return (city || '').substring(0, 3).toUpperCase();
 		};
-		const getStoreCode = (storeId) => {
-			// Use as is
-			return storeId;
-		};
 		// Country only
 		if (territoryType === 'country') {
 			return 'IN';
@@ -99,25 +95,14 @@ function AssignContent() {
 		}
 		return '';
 	}
-	// State for search bars
-	const [searchList, setSearchList] = useState("");
-	const [searchApproved, setSearchApproved] = useState("");
-	const [searchRejected, setSearchRejected] = useState("");
-	const [searchInactive, setSearchInactive] = useState("");
-	// State for disable confirmation modal
-	const [showDisableModal, setShowDisableModal] = useState(false);
-	const [disableTargetId, setDisableTargetId] = useState(null);
 					// Track which video indices are open in the preview modal
 				const [previewContent, setPreviewContent] = useState(null);
 				const [showPreview, setShowPreview] = useState(false);
 			// Load playlists from IndexedDB on mount
 			React.useEffect(() => {
 				async function loadPlaylists() {
-					const all = await getAllPlaylistsFromDB();
-					setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-					setInactiveRows(all.filter(r => r.inactive));
-					setApprovedRows(all.filter(r => r.status === 'approved'));
-					setRejectedRows(all.filter(r => r.status === 'rejected'));
+		// Removed unused variable 'all'
+		// Removed setAddedRows, setInactiveRows, setApprovedRows, setRejectedRows (no longer used)
 				}
 				loadPlaylists();
 			}, []);
@@ -125,7 +110,6 @@ function AssignContent() {
 		const [editingPlaylistId, setEditingPlaylistId] = useState(null);
 		const [wasApproved, setWasApproved] = useState(false);
 	// All hooks and state at the top
-	const [activeTab, setActiveTab] = useState('list');
 	const [playlistName, setPlaylistName] = useState('');
 	const [territoryType, setTerritoryType] = useState('country');
 	const [selectedCountry, setSelectedCountry] = useState('India');
@@ -135,10 +119,7 @@ function AssignContent() {
 	const [filteredStoreIds, setFilteredStoreIds] = useState([]);
 	const [storeIdInput, setStoreIdInput] = useState([]);
 
-	const [addedRows, setAddedRows] = useState([]);
-	const [inactiveRows, setInactiveRows] = useState([]);
-	const [approvedRows, setApprovedRows] = useState([]);
-	const [rejectedRows, setRejectedRows] = useState([]);
+	// Removed unused addedRows, inactiveRows, approvedRows, rejectedRows
 	const [showAddAlert, setShowAddAlert] = useState(false);
 	const [selectedContent, setSelectedContent] = useState(null);
 	const todayStr = new Date().toISOString().split("T")[0];
@@ -151,7 +132,7 @@ function AssignContent() {
 	useEffect(() => {
 		if (location.state && location.state.playlist) {
 			const row = location.state.playlist;
-			setActiveTab('create');
+			// setActiveTab('create'); // removed unused activeTab
 			setPlaylistName(location.state.action === 'clone' ? '' : row.playlistName || '');
 			setTerritoryType(row.territoryType || 'country');
 			setSelectedCountry(row.selectedCountry || 'India');
@@ -164,6 +145,7 @@ function AssignContent() {
 			setEndDate(row.endDate || '');
 			// Optionally set editingPlaylistId, setWasApproved, etc. if needed
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.state]);
 	// Load content from IndexedDB on mount
 	React.useEffect(() => {
@@ -486,6 +468,8 @@ function AssignContent() {
 											if (endDate && e.target.value && endDate < e.target.value) setEndDate("");
 										}}
 										min={new Date().toISOString().split("T")[0]}
+										style={{ cursor: 'pointer' }}
+										onClick={e => e.target.showPicker && e.target.showPicker()}
 									/>
 								</Form.Group>
 							</div>
@@ -499,6 +483,8 @@ function AssignContent() {
 										min={startDate || new Date().toISOString().split("T")[0]}
 										max={startDate ? new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1) - 1).toISOString().split("T")[0] : ""}
 										disabled={!startDate}
+										style={{ cursor: 'pointer' }}
+										onClick={e => e.target.showPicker && e.target.showPicker()}
 									/>
 								</Form.Group>
 							</div>
@@ -794,12 +780,7 @@ function AssignContent() {
 										setShowAddAlert(true);
 										setEditingPlaylistId(null);
 										setWasApproved(false);
-										// Reload all lists from DB to ensure correct tab movement
-										const all = await getAllPlaylistsFromDB();
-										setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-										setInactiveRows(all.filter(r => r.inactive));
-										setApprovedRows(all.filter(r => r.status === 'approved'));
-										setRejectedRows(all.filter(r => r.status === 'rejected'));
+										// Removed setAddedRows, setInactiveRows, setApprovedRows, setRejectedRows (no longer used)
 										// Clear fields after save
 										setPlaylistName("");
 										setTerritoryType("country");
@@ -812,7 +793,7 @@ function AssignContent() {
 										setEndDate("");
 										setAddedContent([]);
 										setTimeout(() => setShowAddAlert(false), 1000);
-										setActiveTab('list');
+										// Removed setActiveTab (no longer used)
 									}}
 									disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate}
 								>

@@ -177,7 +177,7 @@ function DeviceManagement() {
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
   // Modal for disable warning and confirmation
   const [showDisableWarning, setShowDisableWarning] = React.useState(false);
-  const [disableWarningStores, setDisableWarningStores] = React.useState([]);
+  const [disableWarningStores] = React.useState([]);
   const [showDisableConfirm, setShowDisableConfirm] = React.useState(false);
   const [pendingDisableDeviceId, setPendingDisableDeviceId] = React.useState(null);
   // Track disabled devices (array of device IDs)
@@ -186,18 +186,6 @@ function DeviceManagement() {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Disable device handler
-  const handleToggleDisableDevice = (deviceId) => {
-    if (disabledDevices.includes(deviceId)) return;
-    const assignedStores = assignments.filter(a => a.deviceId === deviceId).map(a => a.storeName || a.storeId);
-    if (assignedStores.length > 0) {
-      setDisableWarningStores(assignedStores);
-      setShowDisableWarning(true);
-      return;
-    }
-    setPendingDisableDeviceId(deviceId);
-    setShowDisableConfirm(true);
-  };
 
   const confirmDisableDevice = () => {
     if (pendingDisableDeviceId) {
@@ -265,16 +253,6 @@ function DeviceManagement() {
     setNewDeviceOrientation('both');
     setNewDeviceResolutionWidth('1920');
     setNewDeviceResolutionHeight('1080');
-  };
-
-  const openConfigModal = (device) => {
-    setConfigDevice(device);
-    setConfigName(device.name);
-    setConfigOrientation(device.orientation || 'both');
-    setConfigResolutionWidth(device.resolution?.width || 1920);
-    setConfigResolutionHeight(device.resolution?.height || 1080);
-    setConfigMacAddress(device.macAddress || '');
-    setShowConfigModal(true);
   };
 
   const handleOrientationChange = (newOrientation) => {
@@ -379,15 +357,7 @@ function DeviceManagement() {
     }
   };
 
-  // Clone device handler (must be outside JSX)
-  const handleCloneDevice = (device) => {
-    setNewDeviceName('');
-    setNewDeviceOrientation(device.orientation || 'both');
-    setNewDeviceResolutionWidth(device.resolution?.width?.toString() || '1920');
-    setNewDeviceResolutionHeight(device.resolution?.height?.toString() || '1080');
-    setIsClone(true);
-    setShowAddModal(true);
-  };
+
 
   const handleDownload = () => {
     const dataToExport = [];
@@ -730,7 +700,7 @@ function DeviceManagement() {
                                         d.assignmentId === device.assignmentId ? { ...d, active: !d.active } : d
                                       ));
                                     }}
-                                    label={device.active ? 'Deactivate' : 'Activate'}
+                                    label={device.active ? 'Active' : 'Inactive'}
                                   />
                                   <OverlayTrigger
                                     placement="top"

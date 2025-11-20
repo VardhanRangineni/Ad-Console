@@ -86,10 +86,7 @@ function ContentLibrary() {
   }, []);
 
   // Soft delete (disable, no re-enable)
-  const handleDisableRequest = (content) => {
-    setDisableConfirmId(content.id);
-    setShowDisableModal(true);
-  };
+  // Removed unused handleDisableRequest
   const handleConfirmDisable = async () => {
     // Find the content to disable
     const content = contentList.find(c => c.id === disableConfirmId);
@@ -467,24 +464,35 @@ function ContentLibrary() {
                           <td>{content.title}</td>
                           <td>{content.slides ? content.slides.length : 1}</td>
                           <td>
-                            {content.active !== false && !content.permanentlyDisabled && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <Form.Check
+                                type="switch"
+                                id={`switch-content-${content.id}`}
+                                checked={content.active !== false}
+                                onChange={() => {
+                                  if (content.active !== false) {
+                                    // If toggling to inactive, show confirmation modal
+                                    setDisableConfirmId(content.id);
+                                    setShowDisableModal(true);
+                                  } else {
+                                    // If toggling to active (should not happen for permanentlyDisabled), just update
+                                    const updated = { ...content, active: true, permanentlyDisabled: false };
+                                    updateContent(updated).then(() => {
+                                      getAllContent().then(setContentList);
+                                    });
+                                  }
+                                }}
+                                label={content.active !== false ? 'Active' : 'Inactive'}
+                              />
                               <Button
-                                variant="danger"
+                                variant="outline-primary"
                                 size="sm"
-                                className="me-2 rounded-pill px-3"
-                                onClick={() => handleDisableRequest(content)}
+                                className="rounded-pill px-3"
+                                onClick={() => handleEdit(content)}
                               >
-                                <i className="bi bi-x-circle me-1"></i> Disable
+                                <i className="bi bi-pencil-square me-1"></i> Edit
                               </Button>
-                            )}
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              className="rounded-pill px-3"
-                              onClick={() => handleEdit(content)}
-                            >
-                              <i className="bi bi-pencil-square me-1"></i> Edit
-                            </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}

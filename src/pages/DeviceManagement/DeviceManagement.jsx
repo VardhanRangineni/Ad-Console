@@ -1,10 +1,8 @@
-import { getAllAssignments, addAssignment, deleteAssignment, bulkAddAssignments } from '../../services/deviceIndexeddb';
+import { getAllAssignments, deleteAssignment, bulkAddAssignments } from '../../services/deviceIndexeddb';
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import AsyncSelect from 'react-select/async';
-import * as XLSX from 'xlsx';
+import React, { useEffect } from 'react';
+import { Row, Col, Button, Form, InputGroup, Modal, Alert, OverlayTrigger, Tooltip } from 'react-bootstrap';
 // import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
 // import { getAllContent } from '../../services/indexeddb';
@@ -22,7 +20,6 @@ function DeviceManagement() {
     // ...existing state...
     // Fix: Add missing state for configMacAddress and showInlineAssignForm
     const [configMacAddress, setConfigMacAddress] = React.useState('');
-    const [showInlineAssignForm, setShowInlineAssignForm] = React.useState(true);
     // (No UI code here, but ensure that when rendering, use Bootstrap classes for all forms, tables, and modals)
     // For example, wrap main content in <div className="container-fluid py-4 bg-light min-vh-100">
     // Use .card, .shadow, .rounded, .table, .btn, .form-control, .form-label, .row, .col, etc. for all UI elements
@@ -43,29 +40,9 @@ function DeviceManagement() {
 
   // ...existing code...
 
-  // Download template for device assignments (fixes missing function error)
-  const handleDownloadTemplate = () => {
-    const csvContent = 'Store ID,Device,MAC Address,State,City,Orientation\n';
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'device_assignment_template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const fileInputRef = useRef(null);
   const [selectedStoreForAssignment, setSelectedStoreForAssignment] = React.useState(null);
-  const [devicesForSelectedStore, setDevicesForSelectedStore] = React.useState([]);
-  const [deviceToAssign, setDeviceToAssign] = React.useState(null);
-  const [macAddressToAssign, setMacAddressToAssign] = React.useState('');
-  const [orientationToAssign, setOrientationToAssign] = React.useState('');
 
   // MAC address validation helper (must be after macAddressToAssign is declared)
-  const isValidMac = macAddressToAssign && /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign);
   const [storeDeviceMap, setStoreDeviceMap] = React.useState([]);
   const [assignments, setAssignments] = React.useState([]); // NEW STATE for assignments
   const [activeSubTab, setActiveSubTab] = React.useState('assign');
@@ -128,39 +105,21 @@ function DeviceManagement() {
     }, {});
     setStoreDeviceMap(Object.values(groupedByStore));
   }, [assignments, devices]);
-  // List View column-wise filter state
-  const [listViewStoreIdFilter, setListViewStoreIdFilter] = React.useState('');
-  const [listViewStoreNameFilter, setListViewStoreNameFilter] = React.useState('');
-  const [listViewCityFilter, setListViewCityFilter] = React.useState('');
-  const [listViewStateFilter, setListViewStateFilter] = React.useState('');
 
   useEffect(() => {
     if (selectedStoreForAssignment) {
       const storeData = storeDeviceMap.find(s => s.id === selectedStoreForAssignment.value);
-      setDevicesForSelectedStore(storeData ? storeData.devices : []);
       // When a store is selected, initialize assignTabAssignments for editing
       setAssignTabAssignments(storeData ? storeData.devices.map(d => ({ ...d })) : []);
       setAssignTabEditMode(false);
     } else {
-      setDevicesForSelectedStore([]);
       setAssignTabAssignments([]);
       setAssignTabEditMode(false);
     }
   }, [selectedStoreForAssignment, storeDeviceMap]);
 
-  useEffect(() => {
-    if (deviceToAssign) {
-      const device = devices.find(d => d.id === deviceToAssign);
-      if (device && device.orientation !== 'both') {
-        setOrientationToAssign(device.orientation);
-      } else {
-        setOrientationToAssign(''); // Reset if it's 'both' so user has to choose
-      }
-    }
-  }, [deviceToAssign, devices]);
-
   // ...existing hooks...
-  const [activeTab, setActiveTab] = React.useState('configurator');
+  const [activeTab] = React.useState('configurator');
   const [showAddModal, setShowAddModal] = React.useState(false);
   const [showConfigModal, setShowConfigModal] = React.useState(false);
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
@@ -207,19 +166,6 @@ function DeviceManagement() {
     }
     setShowDisableConfirm(false);
     setPendingDisableDeviceId(null);
-  };
-
-  const storeOptions = useMemo(() => storeList.map(store => ({
-    value: store.id,
-    label: `${store.name} (${store.id})`
-  })), []);
-
-  // Async load options for better performance
-  const loadStoreOptions = (inputValue, callback) => {
-    const filtered = storeOptions.filter(option =>
-      option.label.toLowerCase().includes(inputValue.toLowerCase())
-    );
-    setTimeout(() => callback(filtered), 100); // debounce for smoother UX
   };
 
   // Add Device orientation change handler
@@ -340,45 +286,6 @@ function DeviceManagement() {
 
   // Removed unused: openAssignModal, handleStageAssignment, handleRemoveStagedAssignment, handleAssignToStore
 
-  const handleAssignNewDevice = async () => {
-    if (!selectedStoreForAssignment || !deviceToAssign || !macAddressToAssign || !orientationToAssign) {
-      alert('Please fill all fields.');
-      return;
-    }
-    if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign)) {
-      alert('Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)');
-      return;
-    }
-
-    const newAssignment = {
-      assignmentId: `${Date.now()}-new`,
-      deviceId: deviceToAssign,
-      storeId: selectedStoreForAssignment.value,
-      macAddress: macAddressToAssign,
-      orientation: orientationToAssign,
-      active: true,
-    };
-    await addAssignment(newAssignment);
-    const allAssignments = await getAllAssignments();
-    setAssignments(allAssignments);
-    // Reset form
-    setDeviceToAssign(null);
-    setMacAddressToAssign('');
-    setOrientationToAssign('');
-  };
-
-  const handleDeleteStore = async (storeId) => {
-    if (window.confirm(`Are you sure you want to delete all assignments for store ${storeId}?`)) {
-      const allAssignments = await getAllAssignments();
-      const toDelete = allAssignments.filter(a => a.storeId === storeId);
-      for (const a of toDelete) {
-        await deleteAssignment(a.assignmentId);
-      }
-      const updatedAssignments = await getAllAssignments();
-      setAssignments(updatedAssignments);
-    }
-  };
-
   // Clone device handler (must be outside JSX)
   const handleCloneDevice = (device) => {
     setNewDeviceName('');
@@ -387,111 +294,6 @@ function DeviceManagement() {
     setNewDeviceResolutionHeight(device.resolution?.height?.toString() || '1080');
     setIsClone(true);
     setShowAddModal(true);
-  };
-
-  const handleDownload = () => {
-    const dataToExport = [];
-    storeDeviceMap.forEach(store => {
-      if (store.devices && store.devices.length > 0) {
-        store.devices.forEach(device => {
-          dataToExport.push({
-            'Store ID': store.id,
-            'Store Name': store.name,
-            'City': store.area,
-            'State': store.state,
-            'Device': device.name,
-            'DeviceID': device.id,
-            'MAC Address': device.macAddress,
-            'Status': device.active ? 'Active' : 'Inactive',
-            'Orientation': device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A'),
-          });
-        });
-      }
-    });
-
-    // Create worksheet and add bold headers
-    const headers = [
-      'Store ID', 'Store Name', 'City', 'State', 'Device', 'DeviceID', 'MAC Address', 'Status', 'Orientation'
-    ];
-    const worksheet = XLSX.utils.json_to_sheet([]);
-    XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A1' });
-    XLSX.utils.sheet_add_json(worksheet, dataToExport, { origin: 'A2', skipHeader: true });
-    // Bold header row
-    headers.forEach((header, idx) => {
-      const cell = worksheet[String.fromCharCode(65 + idx) + '1'];
-      if (cell && !cell.s) cell.s = {};
-      if (cell) cell.s = { ...cell.s, font: { bold: true } };
-    });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Device Assignments');
-    XLSX.writeFile(workbook, 'device-assignments.xlsx');
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) {
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const data = new Uint8Array(event.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(worksheet);
-
-      const newAssignments = json.map((row, index) => {
-        const deviceName = row['Device'] ? String(row['Device']).trim() : '';
-        const storeId = row['Store ID'] ? String(row['Store ID']).trim() : '';
-        const macAddress = row['MAC Address'] ? String(row['MAC Address']).trim() : '';
-        let orientation = row['Orientation'] ? String(row['Orientation']).trim().toLowerCase() : '';
-
-        // Map user-friendly terms to internal values
-        if (orientation === 'landscape') orientation = 'horizontal';
-        if (orientation === 'portrait') orientation = 'vertical';
-
-        if (!deviceName || !storeId || !macAddress) {
-          return null;
-        }
-
-        const device = devices.find(d => d.name === deviceName);
-        // Acceptable values: 'horizontal', 'vertical', 'both', or fallback to device.orientation
-        let normalizedOrientation = orientation;
-        if (!['horizontal', 'vertical', 'both'].includes(normalizedOrientation)) {
-          normalizedOrientation = device ? device.orientation : '';
-        }
-        return {
-          assignmentId: `${Date.now()}-${index}`,
-          deviceId: device ? device.id : null,
-          storeId: storeId,
-          macAddress: macAddress,
-          orientation: normalizedOrientation,
-          active: true,
-          originalRow: row, // Keep track for error reporting
-        };
-      });
-
-      const validAssignments = newAssignments.filter(a => a && a.deviceId);
-      const invalidAssignments = newAssignments.filter(a => a && !a.deviceId);
-
-      if (invalidAssignments.length > 0) {
-        const invalidDevices = invalidAssignments.map(a => a.originalRow['Device']).join(', ');
-        alert(`The following devices could not be found and were not assigned: ${invalidDevices}`);
-      }
-
-      const assignmentsToSave = validAssignments.map(({ originalRow, ...rest }) => rest);
-
-      await bulkAddAssignments(assignmentsToSave);
-      const allAssignments = await getAllAssignments();
-      setAssignments(allAssignments);
-
-      // Clear the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsArrayBuffer(file);
   };
 
   // Save Changes in Assign tab (writes to IndexedDB, returns to List View)
@@ -519,15 +321,6 @@ function DeviceManagement() {
     setActiveSubTab('listView');
     setSelectedStoreForAssignment(null);
     setAssignTabEditMode(false);
-  };
-
-  // List View Edit button handler: go to Assign tab, select store, open assign form in edit mode
-  const handleListViewEdit = (store) => {
-    setActiveSubTab('assign');
-    setActiveTab('assign');
-    setSelectedStoreForAssignment({ value: store.id, label: `${store.name} (${store.id})` });
-    setShowInlineAssignForm(true);
-    setAssignTabEditMode(true);
   };
 
   return (
@@ -575,15 +368,6 @@ function DeviceManagement() {
                         <td>
                           {/* Disable/Enable Toggle Switch */}
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            <Form.Check
-                              type="switch"
-                              id={`disable-switch-${device.id}`}
-                              checked={!isDisabled}
-                              onChange={() => handleToggleDisableDevice(device.id)}
-                              disabled={isDisabled}
-                              label={!isDisabled ? 'Active' : 'Inactive'}
-                              style={{ marginBottom: 0, marginRight: 8 }}
-                            />
                             <OverlayTrigger
                               placement="top"
                               overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
@@ -610,6 +394,16 @@ function DeviceManagement() {
                                 <i className="bi bi-files"></i>
                               </Button>
                             </OverlayTrigger>
+
+                            <Form.Check
+                              type="switch"
+                              id={`disable-switch-${device.id}`}
+                              checked={!isDisabled}
+                              onChange={() => handleToggleDisableDevice(device.id)}
+                              disabled={isDisabled}
+                              label={!isDisabled ? 'Active' : 'Inactive'}
+                              style={{ marginBottom: 0, marginRight: 8 }}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -1003,7 +797,7 @@ function DeviceManagement() {
 
       {/* Edit Store Modal removed */}
       {/* Save Changes button for Assign tab (inline form) */}
-      {activeTab === 'assign' && activeSubTab === 'assign' && selectedStoreForAssignment && showInlineAssignForm && assignTabEditMode && (
+      {activeTab === 'assign' && activeSubTab === 'assign' && selectedStoreForAssignment && assignTabEditMode && (
         <div className="d-flex justify-content-end mb-3">
           <Button variant="success" onClick={handleAssignTabSaveChanges}>
             <i className="bi bi-save me-2"></i>Save Changes
