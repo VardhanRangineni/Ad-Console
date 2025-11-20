@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Tabs, Tab, Button, Alert } from 'react-bootstrap';
 
 import { getAllContent, getDB } from '../../services/indexeddb';
+import { storeList } from '../../data/storeList';
 // Playlists store helpers using shared ad-console-db
 
 const PLAYLIST_STORE = 'playlists';
@@ -58,6 +59,54 @@ function AssignContent() {
         loadContent();
     }, []);
 
+    // Normalize store id for comparisons
+    function normalizeStoreId(id) {
+        if (!id) return '';
+        return String(id).trim().toUpperCase();
+    }
+
+    function getTerritoryDisplay(row) {
+        if (!row) return '-';
+        const type = (row.territoryType || '').toLowerCase();
+        if (type === 'country') return row.selectedCountry || 'India';
+        if (type === 'state') {
+            if (Array.isArray(row.selectedState) && row.selectedState.length) return row.selectedState.join(', ');
+            if (typeof row.selectedState === 'string' && row.selectedState) return row.selectedState;
+            return '-';
+        }
+        if (type === 'city') {
+            if (Array.isArray(row.selectedCity) && row.selectedCity.length) return row.selectedCity.join(', ');
+            if (typeof row.selectedCity === 'string' && row.selectedCity) return row.selectedCity;
+            return '-';
+        }
+        if (type === 'store') {
+            const names = [];
+            const addFromIds = (ids) => {
+                if (!ids) return;
+                if (!Array.isArray(ids)) ids = [ids];
+                ids.forEach(id => {
+                    const norm = normalizeStoreId(id);
+                    const s = storeList.find(st => normalizeStoreId(st.id) === norm);
+                    if (s) names.push(`${s.name} (${s.id})`);
+                    else names.push(id);
+                });
+            };
+            // Prefer filteredStoreIds if present, otherwise storeIdInput
+            if (row.filteredStoreIds && row.filteredStoreIds.length) addFromIds(row.filteredStoreIds);
+            if (names.length === 0 && row.storeIdInput && row.storeIdInput.length) addFromIds(row.storeIdInput);
+            if (names.length > 0) return names.join(', ');
+            if (row.regionNomenclature) return row.regionNomenclature;
+            return '-';
+        }
+        // Fallback
+        return (row.territoryType ? row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1) : '-');
+    }
+
+    function getTerritoryLabel(row) {
+        if (!row || !row.territoryType) return '-';
+        return row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1);
+    }
+
     return (
         <div className="assign-content-page">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -90,6 +139,7 @@ function AssignContent() {
                                return (
                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
                                    (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                   (row.type && String(row.type).toLowerCase().includes(q)) ||
                                    (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
                                    (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
                                    (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
@@ -103,6 +153,9 @@ function AssignContent() {
                                             <th>Playlist ID</th>
                                             <th>Playlist Name</th>
                                             <th>Region/Territory</th>
+                                            <th>Type</th>
+                                                <th>Start At</th>
+                                                <th>Stop At</th>
                                             <th>Content Count</th>
                                             <th>Action</th>
                                         </tr>
@@ -115,6 +168,7 @@ function AssignContent() {
                                                    return (
                                                        (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
                                                        (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                       (row.type && String(row.type).toLowerCase().includes(q)) ||
                                                        (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
                                                        (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
                                                        (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
@@ -124,12 +178,15 @@ function AssignContent() {
                                                .map((row, idx) => (
                                             <tr key={row.id || idx}>
                                                 <td>{idx + 1}</td>
-                                                <td>{row.playlistName}</td>
+                                                <td>
+                                                    <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                </td>
                                                    <td>
-                                                       {row.regionNomenclature || (
-                                                           row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)
-                                                       )}
+                                                               {getTerritoryLabel(row)}
                                                    </td>
+                                                <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                <td>{row.triggerStartAt || '-'}</td>
+                                                <td>{row.triggerStopAt || '-'}</td>
                                                 <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
                                                 <td>
                                                        {(!row.status || row.status === 'pending') ? (
@@ -137,8 +194,14 @@ function AssignContent() {
                                                                <Button size="sm" variant="primary" className="me-2" onClick={() => {
                                                                    navigate('/assign', { state: { playlist: row, action: 'edit' } });
                                                                }}>Edit</Button>
+                                                                  {/* Draft badge removed per request - drafts are still present but we don't show 'Draft for' in Created list */}
                                                                <Button size="sm" variant="success" className="ms-2" onClick={async () => {
-                                                                   await updatePlaylistInDB(row.id, { status: 'approved' });
+                                                                   const now = new Date().toISOString();
+                                                                   await updatePlaylistInDB(row.id, { status: 'approved', approvedAt: now });
+                                                                   // If this playlist was a draft created from an approved playlist, disable the original and mark replacement
+                                                                   if (row.draftOf) {
+                                                                       await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null, inactive: true, replacedBy: row.id });
+                                                                   }
                                                                    // Reload all lists from DB to ensure correct tab movement
                                                                    const all = await getAllPlaylistsFromDB();
                                                                    setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
@@ -149,11 +212,14 @@ function AssignContent() {
                                                                <Button size="sm" variant="danger" className="ms-2" onClick={async () => {
                                                                    const now = new Date().toISOString();
                                                                    await updatePlaylistInDB(row.id, { status: 'rejected', rejectedAt: now });
+                                                                   // If this draft was for an approved playlist, re-enable the original
+                                                                   if (row.draftOf) {
+                                                                       await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null });
+                                                                   }
                                                                    // Reload all lists from DB to ensure correct tab movement
                                                                    const all = await getAllPlaylistsFromDB();
                                                                    setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
                                                                    setInactiveRows(all.filter(r => r.inactive));
-                                                                   setApprovedRows(all.filter(r => r.status === 'approved'));
                                                                    setRejectedRows(all.filter(r => r.status === 'rejected'));
                                                                }}>Reject</Button>
                                                            </>
@@ -186,28 +252,32 @@ function AssignContent() {
                            {approvedRows.filter(row => {
                                const q = searchApproved.toLowerCase();
                                if (!q) return true;
-                               return (
-                                   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                               );
+                                                       return (
+                                                           (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                           (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                           (row.type && String(row.type).toLowerCase().includes(q)) ||
+                                                           (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                                           (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                                           (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                                           (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                                                       );
                            }).length > 0 ? (
                                <div style={{ overflowX: 'auto' }}>
                                    <table className="table table-bordered table-sm align-middle">
                                        <thead>
-                                           <tr>
-                                               <th>Playlist ID</th>
-                                               <th>Playlist Name</th>
-                                               <th>Region/Territory</th>
-                                               <th>Start Date</th>
-                                               <th>Effective From</th>
-                                               <th>End Date</th>
-                                               <th>Content Count</th>
-                                               <th>Action</th>
-                                           </tr>
+                                               <tr>
+                                                   <th>Playlist ID</th>
+                                                   <th>Playlist Name</th>
+                                                   <th>Region/Territory</th>
+                                                   <th>Type</th>
+                                                   <th>Start At</th>
+                                                   <th>Stop At</th>
+                                                   <th>Start Date</th>
+                                                   <th>Effective From</th>
+                                                   <th>End Date</th>
+                                                   <th>Content Count</th>
+                                                   <th>Action</th>
+                                               </tr>
                                        </thead>
                                        <tbody>
                                            {approvedRows
@@ -225,14 +295,15 @@ function AssignContent() {
                                                    );
                                                })
                                                .map((row, idx) => (
-                                               <tr key={row.id || idx} style={row.inactive ? { opacity: 0.6, background: '#f8d7da' } : {}}>
+                                               <tr key={row.id || idx} style={(row.inactive || row.disabledWhileEditing || row.pendingDraftId) ? { opacity: 0.6, background: '#f8d7da' } : {}}>
                                                    <td>{idx + 1}</td>
-                                                   <td>{row.playlistName}</td>
                                                    <td>
-                                                       {row.regionNomenclature || (
-                                                           row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)
-                                                       )}
+                                                       <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
+                                                   <td>{getTerritoryLabel(row)}</td>
+                                                   <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                   <td>{row.triggerStartAt || '-'}</td>
+                                                   <td>{row.triggerStopAt || '-'}</td>
                                                    <td>{row.startDate || '-'}</td>
                                                    <td>{(() => {
                                                        const start = row.startDate ? new Date(row.startDate) : null;
@@ -252,6 +323,13 @@ function AssignContent() {
                                                    <td>
                                                        {row.inactive ? (
                                                            <span className="badge bg-danger">Disabled</span>
+                                                       ) : row.pendingDraftId || row.disabledWhileEditing ? (
+                                                           <>
+                                                               <span className="badge bg-secondary">Pending Update</span>
+                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                   navigate('/assign', { state: { playlist: row, action: 'view' } });
+                                                               }}>View</Button>
+                                                           </>
                                                        ) : (
                                                            <>
                                                                <Button size="sm" variant="primary" className="me-2" onClick={() => {
@@ -291,6 +369,9 @@ function AssignContent() {
                                             <th>Playlist ID</th>
                                             <th>Playlist Name</th>
                                             <th>Region/Territory</th>
+                                            <th>Type</th>
+                                            <th>Start At</th>
+                                            <th>Stop At</th>
                                             <th>Start Date</th>
                                             <th>Rejected Date</th>
                                             <th>Content Count</th>
@@ -314,12 +395,13 @@ function AssignContent() {
                                                .map((row, idx) => (
                                                <tr key={row.id || idx}>
                                                    <td>{idx + 1}</td>
-                                                   <td>{row.playlistName}</td>
                                                    <td>
-                                                       {row.regionNomenclature || (
-                                                           row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1)
-                                                       )}
+                                                       <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
+                                                   <td>{getTerritoryLabel(row)}</td>
+                                                   <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                   <td>{row.triggerStartAt || '-'}</td>
+                                                   <td>{row.triggerStopAt || '-'}</td>
                                                    <td>{row.startDate || '-'}</td>
                                                    <td>{(() => {
                                                        // Show rejected date if present
@@ -376,16 +458,19 @@ function AssignContent() {
                                        <table className="table table-bordered table-sm align-middle">
                                         <thead>
                                             <tr>
-                                                <th>Playlist Name</th>
-                                                <th>Territory</th>
-                                                <th>State</th>
-                                                <th>City</th>
-                                                <th>Stores</th>
-                                                <th>Content</th>
-                                                <th>Start Date</th>
-                                                <th>End Date</th>
-                                                <th>Action</th>
-                                            </tr>
+                                                    <th>Playlist Name</th>
+                                                    <th>Territory</th>
+                                                    <th>Type</th>
+                                                    <th>Start At</th>
+                                                    <th>Stop At</th>
+                                                    <th>State</th>
+                                                    <th>City</th>
+                                                    <th>Stores</th>
+                                                    <th>Content</th>
+                                                    <th>Start Date</th>
+                                                    <th>End Date</th>
+                                                    <th>Action</th>
+                                                </tr>
                                         </thead>
                                         <tbody>
                                                {inactiveRows
@@ -395,6 +480,7 @@ function AssignContent() {
                                                        return (
                                                            (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
                                                            (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                           (row.type && String(row.type).toLowerCase().includes(q)) ||
                                                            (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
                                                            (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
                                                            (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
@@ -402,10 +488,15 @@ function AssignContent() {
                                                        );
                                                    })
                                                    .map((row, idx) => (
-                                                <tr key={idx}>
-                                                    <td>{row.playlistName}</td>
-                                                    <td>{row.regionNomenclature || (row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1))}</td>
-                                                    <td>{row.selectedState || '-'}</td>
+                                                   <tr key={idx}>
+                                                       <td>
+                                                           <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                       </td>
+                                                       <td>{getTerritoryDisplay(row)}</td>
+                                                                         <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                                     <td>{row.triggerStartAt || '-'}</td>
+                                                                     <td>{row.triggerStopAt || '-'}</td>
+                                                                     <td>{row.selectedState || '-'}</td>
                                                     <td>{row.selectedCity || '-'}</td>
                                                     <td>
                                                         {row.filteredStoreIds && row.filteredStoreIds.length > 0 && (
