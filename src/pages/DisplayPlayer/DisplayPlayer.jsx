@@ -66,16 +66,19 @@ function DisplayPlayer() {
     }
   }, [deviceId, loadPlaylist]);
 
-  // currentContent is computed above; don't redeclare here
+  // currentContent is the currently selected playlist item
+  const currentContent = playlist[currentIndex];
   const currentType = currentContent ? (currentContent.type || (Array.isArray(currentContent.slides) ? (currentContent.slides.some(s => s.type === 'video') ? 'video' : (currentContent.slides.length > 1 ? 'slideshow' : 'image')) : 'image')) : 'image';
 
   useEffect(() => {
     if (playlist.length === 0) return;
 
+    const cur = playlist[currentIndex];
+    const curType = cur ? (cur.type || (Array.isArray(cur.slides) ? (cur.slides.some(s => s.type === 'video') ? 'video' : (cur.slides.length > 1 ? 'slideshow' : 'image')) : 'image')) : 'image';
     // For slideshows, calculate total duration
-    let duration = currentContent.duration * 1000;
-    if (currentType === 'slideshow' && currentContent.slides) {
-      duration = currentContent.duration * currentContent.slides.length * 1000;
+    let duration = (cur && cur.duration ? cur.duration : 0) * 1000;
+    if (curType === 'slideshow' && cur && cur.slides) {
+      duration = (cur.duration || 0) * cur.slides.length * 1000;
     }
 
     const timer = setTimeout(() => {
