@@ -146,8 +146,24 @@ function DeviceManagement() {
   });
 
   // Disable device handler
-  const handleToggleDisableDevice = (deviceId) => {
-    if (disabledDevices.includes(deviceId)) return;
+  const handleToggleDisableDevice = async (deviceId, isCurrentlyDisabled) => {
+    // If currently disabled -> enabling flow (no confirmation required)
+    if (isCurrentlyDisabled) {
+      const updated = disabledDevices.filter((d) => d !== deviceId);
+      setDisabledDevices(updated);
+      localStorage.setItem('disabledDevices', JSON.stringify(updated));
+      try {
+        const deviceObj = devices.find(d => d.id === deviceId);
+        if (deviceObj) {
+          await updateDevice({ ...deviceObj, active: true });
+          const all = await getAllDevices();
+          setDevices(all);
+        }
+      } catch (err) {
+        console.error('Error enabling device in DB', err);
+      }
+      return;
+    }
     const assignedStores = assignments.filter(a => a.deviceId === deviceId).map(a => a.storeName || a.storeId);
     if (assignedStores.length > 0) {
       setDisableWarningStores(assignedStores);
@@ -158,11 +174,21 @@ function DeviceManagement() {
     setShowDisableConfirm(true);
   };
 
-  const confirmDisableDevice = () => {
+  const confirmDisableDevice = async () => {
     if (pendingDisableDeviceId) {
       const updated = [...disabledDevices, pendingDisableDeviceId];
       setDisabledDevices(updated);
       localStorage.setItem('disabledDevices', JSON.stringify(updated));
+      try {
+        const deviceObj = devices.find(d => d.id === pendingDisableDeviceId);
+        if (deviceObj) {
+          await updateDevice({ ...deviceObj, active: false });
+          const all = await getAllDevices();
+          setDevices(all);
+        }
+      } catch (err) {
+        console.error('Error disabling device in DB', err);
+      }
     }
     setShowDisableConfirm(false);
     setPendingDisableDeviceId(null);
@@ -201,6 +227,8 @@ function DeviceManagement() {
         width: parseInt(newDeviceResolutionWidth),
         height: parseInt(newDeviceResolutionHeight)
       }
+      ,
+      active: true,
     };
     await addDevice(newDevice);
     const all = await getAllDevices();
@@ -265,6 +293,8 @@ function DeviceManagement() {
         width: parseInt(configResolutionWidth),
         height: parseInt(configResolutionHeight)
       }
+      ,
+      active: typeof configDevice?.active === 'boolean' ? configDevice.active : true,
     };
     await updateDevice(updatedDevice);
     const all = await getAllDevices();
@@ -358,7 +388,8 @@ function DeviceManagement() {
                 </thead>
                 <tbody>
                   {devices.map(device => {
-                    const isDisabled = disabledDevices.includes(device.id);
+                    // Determine disabled status from DB active flag or fallback to localStorage
+                    const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
                     return (
                       <tr key={device.id}>
                         <td>{device.id}</td>
@@ -399,8 +430,8 @@ function DeviceManagement() {
                               type="switch"
                               id={`disable-switch-${device.id}`}
                               checked={!isDisabled}
-                              onChange={() => handleToggleDisableDevice(device.id)}
-                              disabled={isDisabled}
+                              onChange={() => handleToggleDisableDevice(device.id, isDisabled)}
+                              disabled={false}
                               label={!isDisabled ? 'Active' : 'Inactive'}
                               style={{ marginBottom: 0, marginRight: 8 }}
                             />

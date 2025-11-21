@@ -1,50 +1,116 @@
 // src/pages/Dashboard/Dashboard.jsx
+
 import React, { useState, useEffect } from 'react';
+import { Pie, Bar } from 'react-chartjs-2';
+import { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
 import { Row, Col, Card, Badge, Modal, Button } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
-import { useApp } from '../../context/AppContext';
+import { getAllDevices } from '../../services/deviceIndexeddb';
+import { getAllContent } from '../../services/indexeddb';
+import { getAllPlaylistsFromDB } from '../ManagePlaylists/ManagePlaylists.jsx';
+import { getRecentActions } from '../../services/activityLog';
 import './Dashboard.css';
+Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 function Dashboard() {
-  const { assignments, deleteAssignment, devices } = useApp();
+  const [playlists, setPlaylists] = useState([]);
+  const [indexedDevices, setIndexedDevices] = useState(null);
+  const [loadingIndexedDevices, setLoadingIndexedDevices] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
   const [allContent, setAllContent] = useState([]);
+  const [recentActions, setRecentActions] = useState([]);
 
-  // Load real content count dynamically
+  // Load playlists and content from IndexedDB
   useEffect(() => {
-    const loadContent = () => {
-      const customContentStr = localStorage.getItem('customContent');
-      const customContent = customContentStr ? JSON.parse(customContentStr) : [];
-      setAllContent(customContent);
-    };
-
-    loadContent();
-
-    // Listen for content changes
-    const handleStorageChange = (e) => {
-      if (e.key === 'customContent') {
-        loadContent();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    async function loadPlaylistsAndContent() {
+      const [dbPlaylists, dbContent] = await Promise.all([
+        getAllPlaylistsFromDB(),
+        getAllContent()
+      ]);
+      setPlaylists(dbPlaylists || []);
+      setAllContent(dbContent || []);
+    }
+    loadPlaylistsAndContent();
+    const interval = setInterval(loadPlaylistsAndContent, 10000); // refresh every 10s
+    return () => clearInterval(interval);
   }, []);
 
-  const confirmDelete = (id) => {
-    setDeleteId(id);
-    setShowDeleteModal(true);
-  };
+  // Load recent actions from activity log (last 15)
+  useEffect(() => {
+    function loadActions() {
+      const acts = getRecentActions(15);
+      setRecentActions(acts);
+    }
+    loadActions();
+    // Listen for activity log updates
+    function onUpdate(e) {
+      loadActions();
+    }
+    window.addEventListener('activityLogUpdate', onUpdate);
+    const interval = setInterval(loadActions, 10000);
+    return () => {
+      window.removeEventListener('activityLogUpdate', onUpdate);
+      clearInterval(interval);
+    };
+  }, []);
 
-  const handleDelete = () => {
-    deleteAssignment(deleteId);
-    setShowDeleteModal(false);
-    setDeleteId(null);
-  };
+  // Remove assignment delete logic for now (not used for playlists)
+  const handleDelete = () => {};
 
-  const onlineDevices = devices.filter(d => d.status === 'online').length;
-  const totalDevices = devices.length;
+  // Prefer devices loaded from indexedDB
+  useEffect(() => {
+    let mounted = true;
+    async function loadDevices() {
+      setLoadingIndexedDevices(true);
+      try {
+        const dbDevices = await getAllDevices();
+        if (!mounted) return;
+        setIndexedDevices(dbDevices || []);
+      } catch (err) {
+        console.error('Error reading devices from indexedDB', err);
+        setIndexedDevices([]);
+      } finally {
+        if (mounted) setLoadingIndexedDevices(false);
+      }
+    }
+    loadDevices();
+    const interval = setInterval(loadDevices, 10000); // refresh every 10s
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Use indexedDB data when loaded (even if empty); while loading fall back to context devices
+  const devicesToUse = indexedDevices || [];
+  const disabledList = JSON.parse(localStorage.getItem('disabledDevices') || '[]');
+  const isDeviceActive = (d) => {
+    if (typeof d?.active === 'boolean') return d.active;
+    if (d?.status) return d.status === 'online';
+    return !disabledList.includes(d.id);
+  };
+  const onlineDevices = devicesToUse.filter(d => isDeviceActive(d)).length;
+  const totalDevices = devicesToUse.length;
+  const offlineDevices = totalDevices - onlineDevices;
+
+
+  // Only consider approved playlists
+  const approvedPlaylists = playlists.filter(p => p.status === 'approved');
+  // Calculate expiring approved playlists (end date within 5 days)
+  const today = new Date();
+  const fiveDaysFromNow = new Date(today);
+  fiveDaysFromNow.setDate(today.getDate() + 5);
+  const expiringPlaylists = approvedPlaylists.filter(p => {
+    if (!p.endDate) return false;
+    const end = new Date(p.endDate);
+    return end >= today && end <= fiveDaysFromNow;
+  });
+
+  // Content counts: prefer 'active' only for the main KPI
+  const totalContent = allContent ? allContent.length : 0;
+  const activeContentCount = allContent ? allContent.filter(c => c.active !== false).length : 0;
+  const inactiveContentCount = Math.max(0, totalContent - activeContentCount);
+
+  // (Click handler for expiring playlists badge removed for now)
 
   return (
     <div className="dashboard">
@@ -56,12 +122,22 @@ function Dashboard() {
       {/* Stats Cards */}
       <Row className="mb-4">
         <Col md={3} sm={6} className="mb-3">
-          <Card className="stat-card bg-primary text-white">
+          <Card className="stat-card bg-primary text-white" style={{ minHeight: 140 }}>
             <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
                 <div>
-                  <h6 className="text-white-50 mb-2">Total Screens</h6>
-                  <h2 className="mb-0">{totalDevices}</h2>
+                  <h6 className="text-white-50 mb-2">Total Devices</h6>
+                  <h2 className="mb-0">
+                    {loadingIndexedDevices ? (
+                      <div className="spinner-border spinner-border-sm text-light" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    ) : totalDevices}
+                  </h2>
+                  <div className="d-flex align-items-center mt-2 small screen-stats">
+                    <div className="me-3">Active: <Badge bg="success">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : onlineDevices}</Badge></div>
+                    <div>Inactive: <Badge bg="danger">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : offlineDevices}</Badge></div>
+                  </div>
                 </div>
                 <i className="bi bi-tv stat-icon"></i>
               </div>
@@ -70,9 +146,9 @@ function Dashboard() {
         </Col>
 
         <Col md={3} sm={6} className="mb-3">
-          <Card className="stat-card bg-success text-white">
+          <Card className="stat-card bg-success text-white" style={{ minHeight: 140 }}>
             <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
                 <div>
                   <h6 className="text-white-50 mb-2">Active Screens</h6>
                   <h2 className="mb-0">{onlineDevices}</h2>
@@ -84,12 +160,15 @@ function Dashboard() {
         </Col>
 
         <Col md={3} sm={6} className="mb-3">
-          <Card className="stat-card bg-info text-white">
+          <Card className="stat-card bg-info text-white" style={{ minHeight: 140 }}>
             <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
                 <div>
                   <h6 className="text-white-50 mb-2">Content Items</h6>
-                  <h2 className="mb-0">{allContent.length}</h2>
+                  <h2 className="mb-0">{activeContentCount}</h2>
+                  <div className="d-flex align-items-center mt-2 small screen-stats">
+                    <div>Inactive: <Badge bg="danger">{inactiveContentCount}</Badge></div>
+                  </div>
                 </div>
                 <i className="bi bi-collection-play stat-icon"></i>
               </div>
@@ -98,12 +177,26 @@ function Dashboard() {
         </Col>
 
         <Col md={3} sm={6} className="mb-3">
-          <Card className="stat-card bg-warning text-white">
+          <Card className="stat-card bg-warning text-white" style={{ minHeight: 140 }}>
             <Card.Body>
-              <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
                 <div>
-                  <h6 className="text-white-50 mb-2">Active Assignments</h6>
-                  <h2 className="mb-0">{assignments.length}</h2>
+                  <h6 className="text-white-50 mb-2">Expiring Playlists</h6>
+                  <h2 className="mb-0">
+                    <Badge
+                      bg="danger"
+                      pill
+                      style={{ fontSize: '1.5rem', verticalAlign: 'middle' }}
+                      title="Playlists expiring in 5 days"
+                    >
+                      {expiringPlaylists.length} <i className="bi bi-exclamation-triangle"></i>
+                    </Badge>
+                  </h2>
+                  {expiringPlaylists.length > 0 && (
+                    <div className="small mt-1 text-danger">
+                      expiring soon
+                    </div>
+                  )}
                 </div>
                 <i className="bi bi-calendar-check stat-icon"></i>
               </div>
@@ -112,108 +205,174 @@ function Dashboard() {
         </Col>
       </Row>
 
-      {/* Quick Actions */}
+      
+
+      {/* Dashboard Graphs */}
       <Row className="mb-4">
-        <Col md={12}>
+        <Col md={6} className="mb-3">
           <Card>
             <Card.Header className="bg-white">
               <h5 className="mb-0">
-                <i className="bi bi-lightning-charge me-2"></i>
-                Quick Actions
+                <i className="bi bi-pie-chart me-2"></i>
+                Device Status
               </h5>
             </Card.Header>
             <Card.Body>
-              <Row>
-                <Col md={4} className="mb-3 mb-md-0">
-                  <Link to="/content" className="action-link">
-                    <div className="action-card text-center p-4 border rounded">
-                      <i className="bi bi-collection-play display-4 text-primary"></i>
-                      <h5 className="mt-3">Browse Content</h5>
-                      <p className="text-muted">View and manage media library</p>
-                    </div>
-                  </Link>
-                </Col>
-                <Col md={4} className="mb-3 mb-md-0">
-                  <Link to="/assign" className="action-link">
-                    <div className="action-card text-center p-4 border rounded">
-                      <i className="bi bi-plus-circle display-4 text-success"></i>
-                      <h5 className="mt-3">Assign Content</h5>
-                      <p className="text-muted">Create new content assignments</p>
-                    </div>
-                  </Link>
-                </Col>
-                <Col md={4}>
-                  <Link to="/devices" className="action-link">
-                    <div className="action-card text-center p-4 border rounded">
-                      <i className="bi bi-tv display-4 text-info"></i>
-                      <h5 className="mt-3">Monitor Screens</h5>
-                      <p className="text-muted">Check screen status and activity</p>
-                    </div>
-                  </Link>
-                </Col>
-              </Row>
+              <Pie
+                data={{
+                  labels: ['Active', 'Inactive'],
+                  datasets: [
+                    {
+                      data: [onlineDevices, offlineDevices],
+                      backgroundColor: ['#28a745', '#dc3545'],
+                      borderWidth: 1,
+                    },
+                  ],
+                }}
+                options={{
+                  plugins: {
+                    legend: { display: true, position: 'bottom' },
+                  },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                }}
+                height={220}
+              />
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={6} className="mb-3">
+          <Card>
+            <Card.Header className="bg-white">
+              <h5 className="mb-0">
+                <i className="bi bi-bar-chart-line me-2"></i>
+                Playlists Expiring (Next 5 Days)
+              </h5>
+            </Card.Header>
+            <Card.Body>
+              <Bar
+                data={{
+                  labels: Array.from({ length: 5 }, (_, i) => {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + i + 1);
+                    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                  }),
+                  datasets: [
+                    {
+                      label: 'Expiring Playlists',
+                      backgroundColor: '#ffc107',
+                      borderColor: '#ff9800',
+                      borderWidth: 1,
+                      data: Array.from({ length: 5 }, (_, i) => {
+                        const day = new Date(today);
+                        day.setDate(today.getDate() + i + 1);
+                        return approvedPlaylists.filter(p => {
+                          if (!p.endDate) return false;
+                          const end = new Date(p.endDate);
+                          return (
+                            end.getFullYear() === day.getFullYear() &&
+                            end.getMonth() === day.getMonth() &&
+                            end.getDate() === day.getDate()
+                          );
+                        }).length;
+                      }),
+                    },
+                  ],
+                }}
+                options={{
+                  plugins: {
+                    legend: { display: false },
+                  },
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                  },
+                }}
+                height={220}
+              />
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
-      {/* Recent Assignments */}
+      {/* Recent Expiring Playlists */}
       <Row>
         <Col md={12}>
           <Card>
             <Card.Header className="bg-white">
               <h5 className="mb-0">
                 <i className="bi bi-clock-history me-2"></i>
-                Recent Assignments
+                Expiring Playlists
               </h5>
             </Card.Header>
             <Card.Body>
-              {assignments.length === 0 ? (
-                <p className="text-muted text-center py-4">No assignments yet</p>
+              {expiringPlaylists.length === 0 ? (
+                <p className="text-muted text-center py-4">No expiring playlists</p>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-hover">
                     <thead>
                       <tr>
-                        <th>Content</th>
-                        <th>Location</th>
+                        <th>Playlist Name</th>
+                        <th>Region/Territory</th>
                         <th>Start Date</th>
                         <th>End Date</th>
-                        <th>Orientation</th>
-                        <th>Actions</th>
+                        <th>Type</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {assignments.slice(0, 10).map(assignment => {
-                        const content = allContent.find(c => c.id === assignment.contentId);
-                        return (
-                          <tr key={assignment.id}>
-                            <td>
-                              <i className="bi bi-play-circle me-2 text-primary"></i>
-                              {content?.title || 'Unknown'}
-                              {content?.custom && <Badge bg="success" className="ms-2">Custom</Badge>}
-                            </td>
-                            <td>{assignment.locationName}</td>
-                            <td>{assignment.startDate}</td>
-                            <td>{assignment.endDate}</td>
-                            <td>
-                              <Badge bg="secondary">
-                                <i className={`bi ${assignment.orientation === 'horizontal' ? 'bi-phone-landscape' : 'bi-phone'} me-1`}></i>
-                                {assignment.orientation}
-                              </Badge>
-                            </td>
-                            <td>
-                              <Button
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={() => confirmDelete(assignment.id)}
-                              >
-                                <i className="bi bi-trash"></i>
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {expiringPlaylists.slice(0, 10).map(playlist => (
+                        <tr key={playlist.id}>
+                          <td>{playlist.playlistName || '-'}</td>
+                          <td>{playlist.territoryType || '-'}</td>
+                          <td>{playlist.startDate || '-'}</td>
+                          <td>{playlist.endDate || '-'}</td>
+                          <td>{playlist.type || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Recent Activity */}
+      <Row className="mt-3">
+        <Col md={12}>
+          <Card>
+            <Card.Header className="bg-white">
+              <h5 className="mb-0">
+                <i className="bi bi-list-task me-2"></i>
+                Recent Activity
+              </h5>
+            </Card.Header>
+            <Card.Body>
+              {recentActions.length === 0 ? (
+                <p className="text-muted text-center py-4">No recent actions</p>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                        <th>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentActions.slice(0, 15).map(action => (
+                        <tr key={action.id}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{action.timestamp ? new Date(action.timestamp).toLocaleString() : '-'}</td>
+                          <td>{action.actor || '-'}</td>
+                          <td>{action.message || action.actionType || '-'}</td>
+                          <td style={{ maxWidth: 400 }}>{action.details ? JSON.stringify(action.details) : '-'}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

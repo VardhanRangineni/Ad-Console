@@ -214,7 +214,14 @@ function ContentLibrary() {
       return;
     }
     // Update content in IndexedDB
-    const updated = { ...editContent, slides: [...(editContent.slides || []), ...validMedia] };
+    const updatedSlides = [...(editContent.slides || []), ...validMedia];
+    const updatedType = updatedSlides.some(s => s.type === 'video') ? 'video' : (updatedSlides.length > 1 ? 'slideshow' : 'image');
+    let updated = { ...editContent, slides: updatedSlides, type: updatedType };
+    // If video slides exist, update the top-level duration similar to add flow
+    if (updatedSlides.length > 0 && updatedSlides[0].type === 'video') {
+      const firstVideo = updatedSlides.find(s => s.type === 'video' && s.duration);
+      if (firstVideo && firstVideo.duration) updated = { ...updated, duration: Math.round(firstVideo.duration) };
+    }
     await updateContent(updated);
     setEditContent(updated);
     setEditNewFiles([]);
@@ -395,6 +402,8 @@ function ContentLibrary() {
       }))
     ]);
     const slidesFiltered = slides.filter(Boolean);
+    const isVideo = slidesFiltered.some(s => s.type === 'video');
+    const isSlideshow = !isVideo && slidesFiltered.length > 1;
     // If video, set top-level duration for compatibility
     let duration = undefined;
     if (slidesFiltered.length > 0 && slidesFiltered[0].type === 'video') {
@@ -405,6 +414,7 @@ function ContentLibrary() {
       id,
       title: newContentName,
       active: true,
+      type: isVideo ? 'video' : isSlideshow ? 'slideshow' : 'image',
       slides: slidesFiltered,
       ...(duration ? { duration } : {})
     };

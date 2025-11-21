@@ -192,6 +192,21 @@ function DeviceManagement() {
       const updated = [...disabledDevices, pendingDisableDeviceId];
       setDisabledDevices(updated);
       localStorage.setItem('disabledDevices', JSON.stringify(updated));
+      // Persist active state in IndexedDB
+      (async () => {
+        try {
+          const deviceObj = (await getAllDevices()).find(d => d.id === pendingDisableDeviceId);
+          if (deviceObj) {
+            await updateDevice({ ...deviceObj, active: false });
+            const all = await getAllDevices();
+            // If the component has setDevices, update local state. Try to setDevices if available.
+            // Some pages share devices via context; attempt to set if variable exists in scope
+            if (typeof setDevices === 'function') setDevices(all);
+          }
+        } catch (err) {
+          console.error('Error disabling device in DB', err);
+        }
+      })();
     }
     setShowDisableConfirm(false);
     setPendingDisableDeviceId(null);

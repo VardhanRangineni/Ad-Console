@@ -1,3 +1,5 @@
+import { addAction } from './activityLog';
+
 class MockBackend {
   constructor() {
     this.init();
@@ -8,7 +10,45 @@ class MockBackend {
       localStorage.setItem('devices', JSON.stringify([]));
     }
     if (!localStorage.getItem('assignments')) {
-      localStorage.setItem('assignments', JSON.stringify([]));
+      // Seed with demo assignments for dashboard testing
+      localStorage.setItem('assignments', JSON.stringify([
+        {
+          id: 1,
+          contentId: 1,
+          locationId: 5,
+          locationName: "Store LA-01",
+          startDate: "2025-11-13",
+          endDate: "2025-11-30",
+          orientation: "horizontal"
+        },
+        {
+          id: 2,
+          contentId: 2,
+          locationId: 8,
+          locationName: "Store SF-01",
+          startDate: "2025-11-13",
+          endDate: "2025-11-29",
+          orientation: "horizontal"
+        },
+        {
+          id: 3,
+          contentId: 3,
+          locationId: 3,
+          locationName: "California (All Stores)",
+          startDate: "2025-11-15",
+          endDate: "2025-12-25",
+          orientation: "both"
+        },
+        {
+          id: 4,
+          contentId: 4,
+          locationId: 4,
+          locationName: "Store NY-01",
+          startDate: "2025-11-20",
+          endDate: "2025-11-23",
+          orientation: "vertical"
+        }
+      ]));
     }
     if (!localStorage.getItem('content')) {
       localStorage.setItem('content', JSON.stringify([]));
@@ -37,6 +77,11 @@ class MockBackend {
       key: 'devices',
       newValue: JSON.stringify(devices)
     }));
+    try {
+      addAction({ actionType: 'device.add', actor: 'system', message: 'Device registered', details: { deviceId: newDevice.id } });
+    } catch(err) {
+      console.error('activity log error', err);
+    }
     
     return newDevice;
   }
@@ -63,6 +108,11 @@ class MockBackend {
       key: 'devices',
       newValue: JSON.stringify(filtered)
     }));
+    try {
+      addAction({ actionType: 'device.delete', actor: 'system', message: 'Device removed', details: { deviceId } });
+    } catch(err) {
+      console.error('activity log error', err);
+    }
   }
 
   updateDeviceHeartbeat(deviceId) {
@@ -106,6 +156,11 @@ class MockBackend {
     window.dispatchEvent(new CustomEvent('contentUpdate', {
       detail: { assignment: newAssignment }
     }));
+    try {
+      addAction({ actionType: 'assignment.add', actor: 'system', message: 'Assignment created', details: { assignmentId: newAssignment.id, contentId: newAssignment.contentId } });
+    } catch(err) {
+      console.error('activity log error', err);
+    }
     
     return newAssignment;
   }
@@ -125,6 +180,11 @@ class MockBackend {
     window.dispatchEvent(new CustomEvent('contentUpdate', {
       detail: { deleted: assignmentId }
     }));
+    try {
+      addAction({ actionType: 'assignment.delete', actor: 'system', message: 'Assignment deleted', details: { assignmentId } });
+    } catch(err) {
+      console.error('activity log error', err);
+    }
   }
 
   generatePairingCode() {

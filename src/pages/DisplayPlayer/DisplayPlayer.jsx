@@ -70,10 +70,11 @@ function DisplayPlayer() {
     if (playlist.length === 0) return;
 
     const currentContent = playlist[currentIndex];
+    const currentType = currentContent.type || (Array.isArray(currentContent.slides) ? (currentContent.slides.some(s => s.type === 'video') ? 'video' : (currentContent.slides.length > 1 ? 'slideshow' : 'image')) : 'image');
     
     // For slideshows, calculate total duration
     let duration = currentContent.duration * 1000;
-    if (currentContent.type === 'slideshow' && currentContent.slides) {
+    if (currentType === 'slideshow' && currentContent.slides) {
       duration = currentContent.duration * currentContent.slides.length * 1000;
     }
 
@@ -142,12 +143,12 @@ function DisplayPlayer() {
 
   return (
     <div className={`display-player ${device.orientation}`}>
-      {currentContent.type === 'slideshow' && currentContent.slides ? (
+      {currentType === 'slideshow' && currentContent.slides ? (
         <SlideshowPlayer 
           slides={currentContent.slides}
           duration={currentContent.duration}
         />
-      ) : currentContent.type === 'video' ? (
+      ) : currentType === 'video' ? (
         <video
           key={currentContent.id}
           src={currentContent.fileUrl}

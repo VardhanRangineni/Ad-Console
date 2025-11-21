@@ -201,7 +201,12 @@ function AssignContent() {
 			setSelectedCity(row.selectedCity || []);
 			setFilteredStoreIds(row.filteredStoreIds ? row.filteredStoreIds.map(normalizeStoreId) : []);
 			setStoreIdInput(row.storeIdInput ? row.storeIdInput.map(normalizeStoreId) : []);
-			setAddedContent(row.selectedContent ? row.selectedContent.map(id => ({ id, title: id, type: 'unknown', duration: 5 })) : []);
+			setAddedContent(row.selectedContent ? row.selectedContent.map(id => {
+				const contentObj = contentList.find(c => String(c.id) === String(id));
+				const detectedType = contentObj ? (contentObj.type || (Array.isArray(contentObj.slides) && contentObj.slides.some(s => s.type === 'video') ? 'video' : 'image')) : 'unknown';
+				const detectedDuration = contentObj ? (contentObj.duration || (Array.isArray(contentObj.slides) && contentObj.slides.find(s => s.type === 'video' && s.duration) ? Math.round(contentObj.slides.find(s => s.type === 'video' && s.duration).duration) : 5)) : 5;
+				return ({ id, title: id, type: detectedType, duration: detectedDuration });
+			}) : []);
 			setStartDate(row.startDate || todayStr);
 			setEndDate(row.endDate || '');
 			// prefill type and triggerInterval. If cloning, do not set editingPlaylistId
@@ -249,6 +254,23 @@ function AssignContent() {
 		}
 		loadContent();
 	}, []);
+
+		// After contentList loads, update any addedContent entries that were created with 'unknown' type
+		useEffect(() => {
+			if (!contentList || contentList.length === 0 || !addedContent || addedContent.length === 0) return;
+			let needUpdate = false;
+			const updatedList = addedContent.map(item => {
+				if (item.type && item.type !== 'unknown') return item;
+				const contentObj = contentList.find(c => String(c.id) === String(item.id));
+				if (!contentObj) return item;
+				needUpdate = true;
+				const detectedType = contentObj.type || (Array.isArray(contentObj.slides) && contentObj.slides.some(s => s.type === 'video') ? 'video' : 'image');
+				const detectedDuration = contentObj.duration || (Array.isArray(contentObj.slides) && (contentObj.slides.find(s => s.type === 'video' && s.duration) || {}).duration ? Math.round((contentObj.slides.find(s => s.type === 'video' && s.duration) || {}).duration) : item.duration || 5);
+				return { ...item, type: detectedType, duration: detectedDuration };
+			});
+			if (needUpdate) setAddedContent(updatedList);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		}, [contentList]);
 
 	const stateOptions = useMemo(() => {
 		const states = Array.from(new Set(storeList.map(s => s.state)));
@@ -740,20 +762,21 @@ function AssignContent() {
 										value={selectedContent ? contentList.filter(content => String(content.id) === String(selectedContent)).map(content => ({ value: String(content.id), label: content.title }))[0] : null}
 										onChange={selected => {
 											setSelectedContent(selected ? selected.value : null);
-											// Set default duration for video or image
-											if (selected) {
-												const c = contentList.find(x => String(x.id) === String(selected.value));
-												// For video, try to get duration from slides if available
-												if (c && c.type === 'video') {
-													// Always use top-level duration for video
-													if (c.duration) setCurrentDuration(Math.round(c.duration));
-													else setCurrentDuration(5);
+												// Set default duration for video or image; fallback to slides if type is missing
+												if (selected) {
+													const c = contentList.find(x => String(x.id) === String(selected.value));
+													const hasVideoSlide = c && (c.type === 'video' || (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video')));
+													if (c && hasVideoSlide) {
+														// Always use top-level duration for video if available, otherwise check first video slide
+														const durationToUse = c.duration || (Array.isArray(c.slides) ? (c.slides.find(s => s.type === 'video' && s.duration) || {}).duration : undefined);
+														if (durationToUse) setCurrentDuration(Math.round(durationToUse));
+														else setCurrentDuration(5);
+													} else {
+														setCurrentDuration(5);
+													}
 												} else {
-													setCurrentDuration(5);
+													setCurrentDuration("");
 												}
-											} else {
-												setCurrentDuration("");
-											}
 										}}
 										placeholder="Select content..."
 										classNamePrefix="react-select"
@@ -772,7 +795,8 @@ function AssignContent() {
 										max={(() => {
 											if (!selectedContent) return 3600;
 											const c = contentList.find(c => String(c.id) === String(selectedContent));
-											if (c && c.type === 'video') {
+											const hasVideo = c && (c.type === 'video' || (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video')));
+											if (hasVideo) {
 												return c.duration ? Math.round(c.duration) : 3600;
 											}
 											return 3600;
@@ -790,7 +814,8 @@ function AssignContent() {
 											let max = 3600;
 											if (selectedContent) {
 												const c = contentList.find(c => String(c.id) === String(selectedContent));
-												if (c && c.type === 'video' && c.duration) {
+												const hasVideo = c && (c.type === 'video' || (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video')));
+												if (hasVideo && c.duration) {
 													max = Math.round(c.duration);
 												}
 											}
@@ -800,6 +825,12 @@ function AssignContent() {
 										}}
 										disabled={!selectedContent || isReadOnly}
 									/>
+									{(() => {
+										const ctmp = selectedContent ? contentList.find(c => String(c.id) === String(selectedContent)) : null;
+										const hasVideoTmp = ctmp && (ctmp.type === 'video' || (Array.isArray(ctmp.slides) && ctmp.slides.some(s => s.type === 'video')));
+										const maxTmp = hasVideoTmp && ctmp && ctmp.duration ? Math.round(ctmp.duration) : null;
+										return hasVideoTmp && maxTmp ? <div className="small text-muted mt-1">Max length: {maxTmp} seconds</div> : null;
+									})()}
 								</Form.Group>
 							</div>
 							<div className="col-md-2">
@@ -807,23 +838,27 @@ function AssignContent() {
 									className="w-100"
 									style={{ marginTop: 30 }}
 									variant="primary"
-									disabled={(() => {
-										if (!selectedContent || !currentDuration) return true;
-										const c = contentList.find(x => String(x.id) === String(selectedContent));
-										if (c && c.type === 'video' && c.duration && Number(currentDuration) > Math.round(c.duration)) {
-											return true;
-										}
-										return false;
-									})() || isReadOnly}
+										disabled={(() => {
+											if (!selectedContent || !currentDuration) return true;
+											const c = contentList.find(x => String(x.id) === String(selectedContent));
+											const hasVideo = c && (c.type === 'video' || (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video')));
+											if (hasVideo && c.duration && Number(currentDuration) > Math.round(c.duration)) {
+												return true;
+											}
+											return false;
+										})() || isReadOnly}
 									onClick={() => {
 										const c = contentList.find(x => String(x.id) === String(selectedContent));
 										if (!c) return;
-										if (c.type === 'video' && c.duration && Number(currentDuration) > Math.round(c.duration)) {
-											alert(`Duration for this video cannot exceed its length (${Math.round(c.duration)} seconds).`);
-											setCurrentDuration(Math.round(c.duration));
+										const hasVideo = (c.type === 'video' || (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video')));
+										const maxDuration = (c && c.duration) ? Math.round(c.duration) : undefined;
+										if (hasVideo && maxDuration && Number(currentDuration) > maxDuration) {
+											alert(`Duration for this video cannot exceed its length (${maxDuration} seconds).`);
+											setCurrentDuration(maxDuration);
 											return;
 										}
-										setAddedContent(prev => [...prev, { id: c.id, title: c.title, type: c.type, duration: currentDuration }]);
+										const contentType = (c && c.type) ? c.type : (Array.isArray(c.slides) && c.slides.some(s => s.type === 'video') ? 'video' : 'image');
+										setAddedContent(prev => [...prev, { id: c.id, title: c.title, type: contentType, duration: currentDuration }]);
 										setSelectedContent(null);
 										setCurrentDuration("");
 									}}

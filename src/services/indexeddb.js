@@ -1,5 +1,6 @@
 // IndexedDB helper for content and images using idb
 import { openDB } from 'idb';
+import { addAction } from './activityLog';
 
 const DB_NAME = 'ad-console-db';
 const DB_VERSION = 3;
@@ -25,7 +26,13 @@ export async function getDB() {
 
 export async function addContent(content) {
   const db = await getDB();
-  return db.add(CONTENT_STORE, content);
+  const id = await db.add(CONTENT_STORE, content);
+  try {
+    addAction({ actionType: 'content.add', actor: 'system', message: 'Content added', details: { contentId: id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return id;
 }
 
 export async function getAllContent() {
@@ -35,10 +42,22 @@ export async function getAllContent() {
 
 export async function updateContent(content) {
   const db = await getDB();
-  return db.put(CONTENT_STORE, content);
+  const res = await db.put(CONTENT_STORE, content);
+  try {
+    addAction({ actionType: 'content.update', actor: 'system', message: 'Content updated', details: { contentId: content.id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return res;
 }
 
 export async function deleteContent(id) {
   const db = await getDB();
-  return db.delete(CONTENT_STORE, id);
+  const res = await db.delete(CONTENT_STORE, id);
+  try {
+    addAction({ actionType: 'content.delete', actor: 'system', message: 'Content deleted', details: { contentId: id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return res;
 }

@@ -31,6 +31,14 @@ function AssignContent() {
     const [searchApproved, setSearchApproved] = useState("");
     const [searchRejected, setSearchRejected] = useState("");
     const [searchInactive, setSearchInactive] = useState("");
+        // Check for expiring param in URL
+        const [expiringOnly, setExpiringOnly] = useState(false);
+        React.useEffect(() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('expiring') === '1') {
+                setExpiringOnly(true);
+            }
+        }, []);
             // Load playlists from IndexedDB on mount
             React.useEffect(() => {
                 async function loadPlaylists() {
@@ -63,6 +71,16 @@ function AssignContent() {
     function normalizeStoreId(id) {
         if (!id) return '';
         return String(id).trim().toUpperCase();
+    }
+
+    // Helper: is playlist expiring in 5 days
+    function isExpiring(row) {
+        if (!row.endDate) return false;
+        const today = new Date();
+        const fiveDaysFromNow = new Date(today);
+        fiveDaysFromNow.setDate(today.getDate() + 5);
+        const end = new Date(row.endDate);
+        return end >= today && end <= fiveDaysFromNow;
     }
 
     function getTerritoryDisplay(row) {
@@ -135,6 +153,9 @@ function AssignContent() {
                            </div>
                            {addedRows.filter(row => {
                                const q = searchList.toLowerCase();
+                               if (expiringOnly) {
+                                   return isExpiring(row);
+                               }
                                if (!q) return true;
                                return (
                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
