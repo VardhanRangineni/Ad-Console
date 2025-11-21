@@ -464,7 +464,7 @@ function AssignContent() {
 								<>
 									{/* Show store selection directly for 'store' territory: no state/city selectors */}
 									<Form.Group className="mb-3" style={{ position: 'relative' }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Store IDs (comma separated)</Form.Label>
+										<Form.Label style={{ fontWeight: 'bold' }}>Store IDs by Comma Seperated</Form.Label>
 										<Form.Control
 											type="text"
 											value={storeIdInputText}
@@ -505,7 +505,6 @@ function AssignContent() {
 											placeholder="e.g. INWBQA00001, INWBQA00002"
 											disabled={isReadOnly}
 										/>
-										<Form.Text className="text-muted">e.g. INWBQA00001, INWBQA00002</Form.Text>
 										<Form.Text className="text-muted">Tip: Type comma-separated store IDs and press <kbd>Enter</kbd> to add valid IDs to the filtered selection.</Form.Text>
 										{showStoreIdsAddAlert && (
 											<Alert variant="success" className="mt-2 py-1">Added {addedStoreIdsCount} store ID(s)</Alert>
@@ -514,8 +513,20 @@ function AssignContent() {
 											<Alert variant="danger" className="mt-2 py-1">Invalid store ID(s): {invalidStoreIds.join(', ')}</Alert>
 										)}
 									</Form.Group>
+
+										<div className="d-flex justify-content-center my-2" style={{ width: '100%' }}>
+											<div
+												role="separator"
+												aria-label="or"
+												className="rounded-circle d-flex align-items-center justify-content-center bg-danger text-white"
+												style={{ width: 40, height: 40, fontWeight: 700 }}
+											>
+												OR
+											</div>
+										</div>
+
 									<Form.Group className="mb-3" style={{ position: 'relative' }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Select Stores (filtered)</Form.Label>
+										<Form.Label style={{ fontWeight: 'bold' }}>Select Stores</Form.Label>
 										<AsyncSelect
 											isMulti
 											cacheOptions
