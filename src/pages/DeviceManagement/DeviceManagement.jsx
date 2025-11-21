@@ -147,21 +147,9 @@ function DeviceManagement() {
 
   // Disable device handler
   const handleToggleDisableDevice = async (deviceId, isCurrentlyDisabled) => {
-    // If currently disabled -> enabling flow (no confirmation required)
+    // If currently disabled -> enabling flow is not allowed (permanently disabled)
     if (isCurrentlyDisabled) {
-      const updated = disabledDevices.filter((d) => d !== deviceId);
-      setDisabledDevices(updated);
-      localStorage.setItem('disabledDevices', JSON.stringify(updated));
-      try {
-        const deviceObj = devices.find(d => d.id === deviceId);
-        if (deviceObj) {
-          await updateDevice({ ...deviceObj, active: true });
-          const all = await getAllDevices();
-          setDevices(all);
-        }
-      } catch (err) {
-        console.error('Error enabling device in DB', err);
-      }
+      alert('This device is permanently disabled and cannot be enabled again.');
       return;
     }
     const assignedStores = assignments.filter(a => a.deviceId === deviceId).map(a => a.storeName || a.storeId);
@@ -390,6 +378,8 @@ function DeviceManagement() {
                   {devices.map(device => {
                     // Determine disabled status from DB active flag or fallback to localStorage
                     const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
+                    // Determine if device is assigned to any store
+                    const isAssignedToStore = assignments.some(a => a.deviceId === device.id);
                     return (
                       <tr key={device.id}>
                         <td>{device.id}</td>
@@ -426,15 +416,22 @@ function DeviceManagement() {
                               </Button>
                             </OverlayTrigger>
 
-                            <Form.Check
-                              type="switch"
-                              id={`disable-switch-${device.id}`}
-                              checked={!isDisabled}
-                              onChange={() => handleToggleDisableDevice(device.id, isDisabled)}
-                              disabled={false}
-                              label={!isDisabled ? 'Active' : 'Inactive'}
-                              style={{ marginBottom: 0, marginRight: 8 }}
-                            />
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip id={`tooltip-disable-${device.id}`}>{isDisabled ? 'This device has been disabled and cannot be re-enabled.' : (isAssignedToStore && device.active ? 'Cannot disable while assigned to a store. Unassign first.' : (isDisabled ? 'Disabled' : !isDisabled ? 'Disable device' : 'Enable device'))}</Tooltip>}
+                            >
+                              <div>
+                                <Form.Check
+                                  type="switch"
+                                  id={`disable-switch-${device.id}`}
+                                  checked={!isDisabled}
+                                  onChange={() => handleToggleDisableDevice(device.id, isDisabled)}
+                                  disabled={isDisabled || (isAssignedToStore && device.active)}
+                                  label={!isDisabled ? 'Active' : 'Inactive'}
+                                  style={{ marginBottom: 0, marginRight: 8 }}
+                                />
+                              </div>
+                            </OverlayTrigger>
                           </div>
                         </td>
                       </tr>
