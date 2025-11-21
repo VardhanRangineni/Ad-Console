@@ -66,7 +66,7 @@ function DisplayPlayer() {
     }
   }, [deviceId, loadPlaylist]);
 
-  const currentContent = playlist[currentIndex];
+  // currentContent is computed above; don't redeclare here
   const currentType = currentContent ? (currentContent.type || (Array.isArray(currentContent.slides) ? (currentContent.slides.some(s => s.type === 'video') ? 'video' : (currentContent.slides.length > 1 ? 'slideshow' : 'image')) : 'image')) : 'image';
 
   useEffect(() => {
