@@ -54,16 +54,24 @@ function AsideBar() {
   return (
     <aside className={`aside-bar${collapsed ? ' closed' : ' open'}`}>  
       <div className="aside-header">
-        <span className="brand" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => setCollapsed(c => !c)}>
-          <i className="bi bi-display me-2"></i>
-          {!collapsed && 'Ad Console HQ'}
+        <span
+          className="brand"
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          onClick={() => setCollapsed(c => !c)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setCollapsed(c => !c); } }}
+        >
+          {/* Replace bootstrap icon with the provided logo image */}
+          <img
+            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGn4Ly_AHVmUJ7QEnVHNWOpmUdTDteZ5cXzA&s"
+            alt="Ad Console HQ logo"
+            className="aside-logo me-2"
+            aria-hidden={collapsed ? 'false' : 'false'}
+          />
+          {!collapsed && 'Ad Console'}
         </span>
         {/* Show close icon only when expanded */}
-        {!collapsed && (
-          <button className="collapse-btn" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar">
-            <i className="bi bi-x"></i>
-          </button>
-        )}
       </div>
       <nav className="aside-nav">
         {navItems.map(item => (

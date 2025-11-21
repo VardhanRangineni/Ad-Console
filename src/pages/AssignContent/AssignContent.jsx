@@ -46,6 +46,9 @@ function AssignContent() {
 	const [triggerStopMinute, setTriggerStopMinute] = useState('00');
 	const [triggerStopAmPm, setTriggerStopAmPm] = useState('PM');
 	const [timeValidationError, setTimeValidationError] = useState('');
+	// Trigger subtype for trigger playlists. '' means no subtype selected yet (show dropdown).
+	// Options: 'time' (time-based triggers), future: 'sensor', 'event', etc.
+	const [triggerSubType, setTriggerSubType] = useState('');
 
 	// helper: convert 12-hour to minutes since midnight
 	const convert12ToMinutes = (hourStr, minuteStr, ampmStr) => {
@@ -58,6 +61,8 @@ function AssignContent() {
 
 	const computeTriggerTimeValidity = () => {
 		if (!playlistType || playlistType !== 'trigger') return true; // only relevant for trigger type
+		// Only validate time window for time-based triggers
+		if (triggerSubType !== 'time') return { valid: true, message: '' };
 		// both must be set
 		if (!triggerStartHour || !triggerStartMinute || !triggerStartAmPm || !triggerStopHour || !triggerStopMinute || !triggerStopAmPm) {
 			return { valid: false, message: 'Start and Stop times are required.' };
@@ -73,14 +78,14 @@ function AssignContent() {
 
 	// validate on change of start/stop inputs
 	useEffect(() => {
-		if (playlistType === 'trigger') {
+		if (playlistType === 'trigger' && triggerSubType === 'time') {
 			const v = computeTriggerTimeValidity();
 			setTimeValidationError(v.message);
 		} else {
 			setTimeValidationError('');
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [triggerStartHour, triggerStartMinute, triggerStartAmPm, triggerStopHour, triggerStopMinute, triggerStopAmPm, playlistType]);
+	}, [triggerStartHour, triggerStartMinute, triggerStartAmPm, triggerStopHour, triggerStopMinute, triggerStopAmPm, playlistType, triggerSubType]);
 	// ...existing code...
 	const location = useLocation();
 	const navigate = useNavigate();
@@ -202,6 +207,12 @@ function AssignContent() {
 			// prefill type and triggerInterval. If cloning, do not set editingPlaylistId
 			setPlaylistType(row.type || 'regular');
 			setTriggerInterval(row.triggerInterval || 5);
+			// If editing an existing trigger playlist, prefill subtype if set; default to 'time' for existing trigger data
+			if (row.type === 'trigger') {
+				if (row.triggerSubType) setTriggerSubType(row.triggerSubType);
+				else if (row.triggerStartAt || row.triggerStopAt || row.triggerInterval) setTriggerSubType('time');
+				else setTriggerSubType('');
+			}
 			// Prefill trigger start/stop values if present
 			if (row.triggerStartAt) {
 				// Expect stored format e.g. '08:00 AM'
@@ -321,6 +332,7 @@ function AssignContent() {
 				</h2>
 			</div>
 				<div className="p-3">
+					
 					<Form>
 							<Form.Group className="mb-3">
 								<Form.Label style={{ fontWeight: 'bold' }}>Playlist Name</Form.Label>
@@ -464,6 +476,38 @@ function AssignContent() {
 								<>
 									{/* Show store selection directly for 'store' territory: no state/city selectors */}
 									<Form.Group className="mb-3" style={{ position: 'relative' }}>
+										<Form.Label style={{ fontWeight: 'bold' }}>Select Stores</Form.Label>
+										<AsyncSelect
+											isMulti
+											cacheOptions
+											defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+											loadOptions={loadFilteredStoreOptions}
+											value={storeOptions.filter(opt => filteredStoreIds.map(normalizeStoreId).includes(normalizeStoreId(opt.id))).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+											onChange={selected => {
+												const ids = selected ? selected.map(opt => normalizeStoreId(opt.value)) : [];
+												// Only update the filtered store ids; do not populate the storeIdInput tags
+												setFilteredStoreIds(ids);
+											}}
+											placeholder="Select stores..."
+											classNamePrefix="react-select"
+											menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+											styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
+											isDisabled={isReadOnly}
+										/>
+									</Form.Group>
+
+										<div className="d-flex justify-content-center my-2" style={{ width: '100%' }}>
+											<div
+												role="separator"
+												aria-label="or"
+												className="rounded-circle d-flex align-items-center justify-content-center bg-danger text-white"
+												style={{ width: 40, height: 40, fontWeight: 700 }}
+											>
+												OR
+											</div>
+										</div>
+
+										<Form.Group className="mb-3" style={{ position: 'relative' }}>
 										<Form.Label style={{ fontWeight: 'bold' }}>Store IDs by Comma Seperated</Form.Label>
 										<Form.Control
 											type="text"
@@ -513,38 +557,6 @@ function AssignContent() {
 											<Alert variant="danger" className="mt-2 py-1">Invalid store ID(s): {invalidStoreIds.join(', ')}</Alert>
 										)}
 									</Form.Group>
-
-										<div className="d-flex justify-content-center my-2" style={{ width: '100%' }}>
-											<div
-												role="separator"
-												aria-label="or"
-												className="rounded-circle d-flex align-items-center justify-content-center bg-danger text-white"
-												style={{ width: 40, height: 40, fontWeight: 700 }}
-											>
-												OR
-											</div>
-										</div>
-
-									<Form.Group className="mb-3" style={{ position: 'relative' }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Select Stores</Form.Label>
-										<AsyncSelect
-											isMulti
-											cacheOptions
-											defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-											loadOptions={loadFilteredStoreOptions}
-											value={storeOptions.filter(opt => filteredStoreIds.map(normalizeStoreId).includes(normalizeStoreId(opt.id))).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-											onChange={selected => {
-												const ids = selected ? selected.map(opt => normalizeStoreId(opt.value)) : [];
-												// Only update the filtered store ids; do not populate the storeIdInput tags
-												setFilteredStoreIds(ids);
-											}}
-											placeholder="Select stores..."
-											classNamePrefix="react-select"
-											menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-											styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
-											isDisabled={isReadOnly}
-										/>
-									</Form.Group>
 								</>
 							)}
 
@@ -583,6 +595,138 @@ function AssignContent() {
 								</Form.Group>
 							</div>
 						</div>
+
+						<div className="mx-auto d-flex flex-column align-items-start" style={{ minWidth: 220, width: '100%', maxWidth: 320 }}>
+						<div className="d-flex align-items-center" style={{ gap: 16 }}>
+							<Form.Check
+								type="radio"
+								id="playlist-type-regular"
+								name="playlistType"
+								label={<label htmlFor="playlist-type-regular" style={{ cursor: 'pointer', marginBottom: 0 }}>Regular</label>}
+								style={{ marginRight: 12 }}
+								checked={playlistType === 'regular'}
+								onChange={() => { setPlaylistType('regular'); setTriggerSubType(''); }}
+								disabled={isReadOnly}
+							/>
+							<Form.Check
+								type="radio"
+								id="playlist-type-trigger"
+								name="playlistType"
+								label={<label htmlFor="playlist-type-trigger" style={{ cursor: 'pointer', marginBottom: 0 }}>Trigger-based</label>}
+								checked={playlistType === 'trigger'}
+								onChange={() => { setPlaylistType('trigger'); setTriggerSubType(''); }}
+								disabled={isReadOnly}
+							/>
+						</div>
+						{playlistType === 'trigger' && (
+							<>
+								<div className="mt-2 w-100" style={{ minWidth: 220 }}>
+									<Form.Label style={{ fontWeight: 'bold', marginBottom: 6 }}>Trigger Type</Form.Label>
+									<Form.Select
+										id="trigger-subtype"
+										value={triggerSubType}
+										onChange={e => setTriggerSubType(e.target.value)}
+										disabled={isReadOnly}
+										aria-label="Trigger subtype"
+										style={{ maxWidth: 320 }}
+									>
+										<option value="">Select trigger type...</option>
+										<option value="time">Time-based trigger</option>
+									</Form.Select>
+								</div>
+								{/* Only show time-based trigger controls when selected */}
+								{triggerSubType === 'time' && (
+									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
+										<div className="row mb-2 align-items-center">
+											<div className="col-3">
+												<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Trigger Interval</Form.Label>
+											</div>
+											<div className="col-9 col-md-auto">
+												<Form.Control
+													type="number"
+													min={5}
+													step={5}
+													value={triggerInterval}
+													onChange={e => {
+														let val = parseInt(e.target.value, 10);
+														if (isNaN(val) || val < 5) val = 5;
+														// Always round to nearest lower multiple of 5
+														val = Math.floor(val / 5) * 5;
+														setTriggerInterval(val);
+													}}
+													style={{ width: 100 }}
+													disabled={isReadOnly}
+												/>
+											</div>
+											<div className="col-auto">
+												<span>minutes</span>
+											</div>
+										</div>
+										<div className="row mb-2 align-items-center">
+											<div className="col-3">
+												<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Start At</Form.Label>
+											</div>
+											<div className="col-9 col-md-auto">
+												<div className="d-flex" style={{ gap: 6 }}>
+													<Form.Select id="trigger-start-hour" aria-label="Trigger start hour" value={triggerStartHour} onChange={e => setTriggerStartHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
+														{Array.from({ length: 12 }).map((_, i) => {
+															const v = String(i + 1).padStart(2, '0');
+															return <option key={v} value={v}>{v}</option>;
+														})}
+													</Form.Select>
+													<Form.Select id="trigger-start-minute" aria-label="Trigger start minute" value={triggerStartMinute} onChange={e => setTriggerStartMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+														{Array.from({ length: 12 }).map((_, i) => {
+															const m = String(i * 5).padStart(2, '0');
+															return <option key={m} value={m}>{m}</option>;
+														})}
+													</Form.Select>
+													<Form.Select id="trigger-start-ampm" aria-label="Trigger start AM/PM" value={triggerStartAmPm} onChange={e => setTriggerStartAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+														<option value="AM">AM</option>
+														<option value="PM">PM</option>
+													</Form.Select>
+												</div>
+											</div>
+											<div className="col" />
+										</div>
+										<div className="row mb-2 align-items-center">
+											<div className="col-3">
+												<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Stop At</Form.Label>
+											</div>
+											<div className="col-9 col-md-auto">
+												<div className="d-flex" style={{ gap: 6 }}>
+													<Form.Select id="trigger-stop-hour" aria-label="Trigger stop hour" value={triggerStopHour} onChange={e => setTriggerStopHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
+														{Array.from({ length: 12 }).map((_, i) => {
+															const v = String(i + 1).padStart(2, '0');
+															return <option key={v} value={v}>{v}</option>;
+														})}
+													</Form.Select>
+													<Form.Select id="trigger-stop-minute" aria-label="Trigger stop minute" value={triggerStopMinute} onChange={e => setTriggerStopMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+														{Array.from({ length: 12 }).map((_, i) => {
+															const m = String(i * 5).padStart(2, '0');
+															return <option key={m} value={m}>{m}</option>;
+														})}
+													</Form.Select>
+													<Form.Select id="trigger-stop-ampm" aria-label="Trigger stop AM/PM" value={triggerStopAmPm} onChange={e => setTriggerStopAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+														<option value="AM">AM</option>
+														<option value="PM">PM</option>
+													</Form.Select>
+												</div>
+											</div>
+											<div className="col" />
+										</div>
+										{timeValidationError && (
+											<div className="row mt-1">
+												<div className="col-3" />
+												<div className="col-9 text-danger">
+													{timeValidationError}
+												</div>
+											</div>
+										)}
+									</div>
+								)}
+							</>
+						)}
+					</div>
 
 						{/* Select Content (single) and duration - always directly below date pickers */}
 						<div className="row mb-3 align-items-end">
@@ -822,6 +966,12 @@ function AssignContent() {
 
 										// Ensure if trigger type is selected, interval is at least 5 and is multiple of 5
 										if (playlistType === 'trigger') {
+											if (!triggerSubType) {
+												alert('Please select a trigger type.');
+												return;
+											}
+										}
+										if (playlistType === 'trigger' && triggerSubType === 'time') {
 											let ti = Number(triggerInterval);
 											if (isNaN(ti) || ti < 5) {
 												alert('Trigger interval must be at least 5 minutes.');
@@ -839,7 +989,7 @@ function AssignContent() {
 
 										// Build common playlist object data
 										const type = playlistType === 'trigger' ? 'trigger' : 'regular';
-										const triggerOptions = playlistType === 'trigger' ? { triggerInterval, triggerStartAt: `${parseInt(triggerStartHour,10)}:${triggerStartMinute} ${triggerStartAmPm}`, triggerStopAt: `${parseInt(triggerStopHour,10)}:${triggerStopMinute} ${triggerStopAmPm}` } : {};
+										const triggerOptions = playlistType === 'trigger' ? (triggerSubType === 'time' ? { triggerInterval, triggerStartAt: `${parseInt(triggerStartHour,10)}:${triggerStartMinute} ${triggerStartAmPm}`, triggerStopAt: `${parseInt(triggerStopHour,10)}:${triggerStopMinute} ${triggerStopAmPm}`, triggerSubType } : { triggerSubType }) : {};
 
 										if (editingPlaylistId) {
 											const updatedPlaylist = {
@@ -933,7 +1083,7 @@ function AssignContent() {
 										setTriggerInterval(5);
 										setTimeout(() => setShowAddAlert(false), 1000);
 									}}
-									disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate || (playlistType === 'trigger' && (!triggerInterval || Number(triggerInterval) < 5 || !computeTriggerTimeValidity().valid))}
+									disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate || (playlistType === 'trigger' && !triggerSubType) || (playlistType === 'trigger' && triggerSubType === 'time' && (!triggerInterval || Number(triggerInterval) < 5 || !computeTriggerTimeValidity().valid))}
 								>
 									{editingPlaylistId ? 'Save Changes' : 'Create Playlist'}
 								</Button>
@@ -967,118 +1117,7 @@ function AssignContent() {
 									}}>Back</Button>
 								)
 							)}
-								<div className="ms-auto" style={{ minWidth: 220, width: 320 }}>
-									<div className="d-flex align-items-center" style={{ gap: 16 }}>
-										<Form.Check
-											type="radio"
-											id="playlist-type-regular"
-											name="playlistType"
-											label={<label htmlFor="playlist-type-regular" style={{ cursor: 'pointer', marginBottom: 0 }}>Regular</label>}
-											style={{ marginRight: 12 }}
-											checked={playlistType === 'regular'}
-											onChange={() => setPlaylistType('regular')}
-											disabled={isReadOnly}
-										/>
-										<Form.Check
-											type="radio"
-											id="playlist-type-trigger"
-											name="playlistType"
-											label={<label htmlFor="playlist-type-trigger" style={{ cursor: 'pointer', marginBottom: 0 }}>Trigger-based</label>}
-											checked={playlistType === 'trigger'}
-											onChange={() => setPlaylistType('trigger')}
-											disabled={isReadOnly}
-										/>
-									</div>
-									{playlistType === 'trigger' && (
-										<div className="mt-2" style={{ minWidth: 220 }}>
-											<div className="row mb-2 align-items-center">
-												<div className="col-3">
-													<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Trigger Interval</Form.Label>
-												</div>
-												<div className="col-9 col-md-auto">
-													<Form.Control
-														type="number"
-														min={5}
-														step={5}
-														value={triggerInterval}
-														onChange={e => {
-															let val = parseInt(e.target.value, 10);
-															if (isNaN(val) || val < 5) val = 5;
-															// Always round to nearest lower multiple of 5
-															val = Math.floor(val / 5) * 5;
-															setTriggerInterval(val);
-														}}
-														style={{ width: 100 }}
-														disabled={isReadOnly}
-													/>
-												</div>
-												<div className="col-auto">
-													<span>minutes</span>
-												</div>
-											</div>
-											<div className="row mb-2 align-items-center">
-												<div className="col-3">
-													<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Start At</Form.Label>
-												</div>
-												<div className="col-9 col-md-auto">
-													<div className="d-flex" style={{ gap: 6 }}>
-														<Form.Select id="trigger-start-hour" aria-label="Trigger start hour" value={triggerStartHour} onChange={e => setTriggerStartHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
-															{Array.from({ length: 12 }).map((_, i) => {
-																const v = String(i + 1).padStart(2, '0');
-																return <option key={v} value={v}>{v}</option>;
-															})}
-														</Form.Select>
-														<Form.Select id="trigger-start-minute" aria-label="Trigger start minute" value={triggerStartMinute} onChange={e => setTriggerStartMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
-															{Array.from({ length: 12 }).map((_, i) => {
-																const m = String(i * 5).padStart(2, '0');
-																return <option key={m} value={m}>{m}</option>;
-															})}
-														</Form.Select>
-														<Form.Select id="trigger-start-ampm" aria-label="Trigger start AM/PM" value={triggerStartAmPm} onChange={e => setTriggerStartAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
-															<option value="AM">AM</option>
-															<option value="PM">PM</option>
-														</Form.Select>
-													</div>
-												</div>
-												<div className="col" />
-											</div>
-											<div className="row mb-2 align-items-center">
-												<div className="col-3">
-													<Form.Label style={{ fontWeight: 'bold', marginBottom: 0 }}>Stop At</Form.Label>
-												</div>
-												<div className="col-9 col-md-auto">
-													<div className="d-flex" style={{ gap: 6 }}>
-														<Form.Select id="trigger-stop-hour" aria-label="Trigger stop hour" value={triggerStopHour} onChange={e => setTriggerStopHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
-															{Array.from({ length: 12 }).map((_, i) => {
-																const v = String(i + 1).padStart(2, '0');
-																return <option key={v} value={v}>{v}</option>;
-															})}
-														</Form.Select>
-														<Form.Select id="trigger-stop-minute" aria-label="Trigger stop minute" value={triggerStopMinute} onChange={e => setTriggerStopMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
-															{Array.from({ length: 12 }).map((_, i) => {
-																const m = String(i * 5).padStart(2, '0');
-																return <option key={m} value={m}>{m}</option>;
-															})}
-														</Form.Select>
-														<Form.Select id="trigger-stop-ampm" aria-label="Trigger stop AM/PM" value={triggerStopAmPm} onChange={e => setTriggerStopAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
-															<option value="AM">AM</option>
-															<option value="PM">PM</option>
-														</Form.Select>
-													</div>
-												</div>
-												<div className="col" />
-											</div>
-											{timeValidationError && (
-												<div className="row mt-1">
-													<div className="col-3" />
-													<div className="col-9 text-danger">
-														{timeValidationError}
-													</div>
-												</div>
-											)}
-										</div>
-									)}
-								</div>
+								
 							</div>
 						</Form>
 						{showAddAlert && (

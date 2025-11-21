@@ -35,6 +35,20 @@
   font-size: 1.1rem;
   white-space: nowrap;
 }
+
+/* Logo inside the aside header */
+.aside-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+/* Slightly larger and centered icon when collapsed */
+.aside-bar.collapsed .aside-logo {
+  width: 32px;
+  height: 32px;
+}
 .collapse-btn {
   background: none;
   border: none;
