@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import ContentLibrary from './pages/ContentLibrary/ContentLibrary';
 import AssignContent from './pages/AssignContent/AssignContent';
 import ManagePlaylists from './pages/ManagePlaylists/ManagePlaylists';
-import Monitor from './pages/Monitor/Monitor';
 import DisplayPlayer from './pages/DisplayPlayer/DisplayPlayer';
 import DeviceManagement from './pages/DeviceManagement/DeviceManagement';
 import DeviceStoreMapping from './pages/DeviceStoreMapping/DeviceStoreMapping';
@@ -31,7 +30,7 @@ function App() {
                     <Route path="/content" element={<ContentLibrary />} />
                     <Route path="/assign" element={<AssignContent />} />
                     <Route path="/manage-playlists" element={<ManagePlaylists />} />
-                    <Route path="/monitor" element={<Monitor />} />
+                    {/* Monitor page removed - route deleted */}
                     <Route path="/devices" element={<DeviceManagement />} />
                     <Route path="/settings" element={<DeviceStoreMapping />} />
                   </Routes>

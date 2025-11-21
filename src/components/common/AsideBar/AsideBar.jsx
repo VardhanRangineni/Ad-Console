@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './AsideBar.css';
-import logo from '../../../assets/images/logo.svg';
 
 
 function AsideBar() {
@@ -30,7 +29,7 @@ function AsideBar() {
         { to: '/settings', label: 'Device Store Mapping' },
       ],
     },
-    { to: '/monitor', icon: 'bi-tv', label: 'Monitor' },
+    // Monitor page removed
   ];
 
   useEffect(() => {
@@ -65,7 +64,7 @@ function AsideBar() {
         >
           {/* Replace bootstrap icon with the provided logo image */}
           <img
-            src={logo}
+            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGn4Ly_AHVmUJ7QEnVHNWOpmUdTDteZ5cXzA&s"
             alt="Ad Console HQ logo"
             className="aside-logo me-2"
             aria-hidden={collapsed ? 'false' : 'false'}
@@ -73,6 +72,7 @@ function AsideBar() {
           {!collapsed && 'Ad Console'}
         </span>
         {/* Show close icon only when expanded */}
+
       </div>
       <nav className="aside-nav">
         {navItems.map(item => (

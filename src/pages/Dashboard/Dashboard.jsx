@@ -143,7 +143,7 @@ function Dashboard() {
                   </Link>
                 </Col>
                 <Col md={4}>
-                  <Link to="/monitor" className="action-link">
+                  <Link to="/devices" className="action-link">
                     <div className="action-card text-center p-4 border rounded">
                       <i className="bi bi-tv display-4 text-info"></i>
                       <h5 className="mt-3">Monitor Screens</h5>

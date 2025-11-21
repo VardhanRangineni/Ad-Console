@@ -48,14 +48,7 @@ function Navbar() {
               <i className="bi bi-hdd-network me-1"></i>
               Devices
             </Nav.Link>
-            <Nav.Link 
-              as={Link} 
-              to="/monitor" 
-              active={location.pathname === '/monitor'}
-            >
-              <i className="bi bi-tv me-1"></i>
-              Monitor
-            </Nav.Link>
+            {/* Monitor page removed - link omitted */}
           </Nav>
         </BSNavbar.Collapse>
       </Container>
