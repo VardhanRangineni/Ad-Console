@@ -6,7 +6,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import ContentLibrary from './pages/ContentLibrary/ContentLibrary';
 import AssignContent from './pages/AssignContent/AssignContent';
 import ManagePlaylists from './pages/ManagePlaylists/ManagePlaylists';
-import DisplayPlayer from './pages/DisplayPlayer/DisplayPlayer';
+// DisplayPlayer component removed; use a placeholder route or re-add component if needed
 import DeviceManagement from './pages/DeviceManagement/DeviceManagement';
 import DeviceStoreMapping from './pages/DeviceStoreMapping/DeviceStoreMapping';
 import './App.css';
@@ -17,8 +17,8 @@ function App() {
       <Router>
         <div className="App">
           <Routes>
-            {/* Display Player Route - No Navbar */}
-            <Route path="/display/:deviceId" element={<DisplayPlayer />} />
+            {/* Display Player Route - placeholder while DisplayPlayer is removed */}
+            <Route path="/display/:deviceId" element={<div style={{padding: 40}}>Display Player is not available</div>} />
             
             {/* Admin Routes - With Navbar */}
             <Route path="*" element={
