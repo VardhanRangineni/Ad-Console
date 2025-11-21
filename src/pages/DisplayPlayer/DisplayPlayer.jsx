@@ -66,12 +66,12 @@ function DisplayPlayer() {
     }
   }, [deviceId, loadPlaylist]);
 
+  const currentContent = playlist[currentIndex];
+  const currentType = currentContent ? (currentContent.type || (Array.isArray(currentContent.slides) ? (currentContent.slides.some(s => s.type === 'video') ? 'video' : (currentContent.slides.length > 1 ? 'slideshow' : 'image')) : 'image')) : 'image';
+
   useEffect(() => {
     if (playlist.length === 0) return;
 
-    const currentContent = playlist[currentIndex];
-    const currentType = currentContent.type || (Array.isArray(currentContent.slides) ? (currentContent.slides.some(s => s.type === 'video') ? 'video' : (currentContent.slides.length > 1 ? 'slideshow' : 'image')) : 'image');
-    
     // For slideshows, calculate total duration
     let duration = currentContent.duration * 1000;
     if (currentType === 'slideshow' && currentContent.slides) {
