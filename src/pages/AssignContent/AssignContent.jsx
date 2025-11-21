@@ -596,8 +596,9 @@ function AssignContent() {
 							</div>
 						</div>
 
-						<div className="mx-auto d-flex flex-column align-items-start" style={{ minWidth: 220, width: '100%', maxWidth: 320 }}>
-						<div className="d-flex align-items-center" style={{ gap: 16 }}>
+						<div className="d-flex flex-column align-items-start mb-3 mt-1" style={{ minWidth: 220, width: '100%', maxWidth: 320 }}>
+							<Form.Label style={{ fontWeight: 'bold', marginBottom: 6 }}>Playlist Type</Form.Label>
+							<div className="d-flex align-items-center" style={{ gap: 16 }}>
 							<Form.Check
 								type="radio"
 								id="playlist-type-regular"
