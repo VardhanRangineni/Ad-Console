@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="380" viewBox="0 0 1000 380">
+  <rect x="30" y="30" width="160" height="48" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="110" y="60" text-anchor="middle" font-family="Arial" font-size="12">User</text>
+  <rect x="260" y="30" width="160" height="48" fill="#fff3cd" stroke="#ffeeba"/>
+  <text x="340" y="60" text-anchor="middle" font-family="Arial" font-size="12">Browser UI</text>
+  <rect x="500" y="30" width="160" height="48" fill="#e2e3e5" stroke="#d3d7da"/>
+  <text x="580" y="60" text-anchor="middle" font-family="Arial" font-size="12">IndexedDB</text>
+  <rect x="740" y="30" width="160" height="48" fill="#d1e7dd" stroke="#bcd0c7"/>
+  <text x="820" y="60" text-anchor="middle" font-family="Arial" font-size="12">Mock Backend / WS</text>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#495057" />
+    </marker>
+  </defs>
+  <!-- Arrows for flow -->
+  <line x1="190" y1="54" x2="260" y2="54" stroke="#495057" stroke-width="2" marker-end="url(#arr)" />
+  <line x1="420" y1="54" x2="500" y2="54" stroke="#495057" stroke-width="2" marker-end="url(#arr)" />
+  <line x1="660" y1="54" x2="740" y2="54" stroke="#495057" stroke-width="2" marker-end="url(#arr)" />
+  <text x="350" y="95" font-family="Arial" font-size="12">Fill form: name, content, territory</text>
+  <text x="350" y="115" font-family="Arial" font-size="12">UI validates inputs (playlist name, trigger time, interval)</text>
+  <text x="550" y="95" font-family="Arial" font-size="12">Save playlist to IndexedDB</text>
+  <text x="770" y="95" font-family="Arial" font-size="12">Mock backend notifies WebSocket -> Devices</text>
+  <rect x="30" y="140" width="870" height="180" fill="none" stroke="#dee2e6" rx="6"/>
+  <text x="460" y="170" font-family="Arial" font-size="12" text-anchor="middle">If validation fails, UI displays inline errors and prevents save</text>
+  <text x="460" y="190" font-family="Arial" font-size="12" text-anchor="middle">If validation passes, UI writes to IndexedDB, notifies backend, and backend publishes to devices</text>
+</svg>

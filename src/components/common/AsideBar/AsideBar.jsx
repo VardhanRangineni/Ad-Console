@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './AsideBar.css';
+import logo from '../../../assets/images/logo.svg';
 
 
 function AsideBar() {
@@ -64,7 +65,7 @@ function AsideBar() {
         >
           {/* Replace bootstrap icon with the provided logo image */}
           <img
-            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGn4Ly_AHVmUJ7QEnVHNWOpmUdTDteZ5cXzA&s"
+            src={logo}
             alt="Ad Console HQ logo"
             className="aside-logo me-2"
             aria-hidden={collapsed ? 'false' : 'false'}

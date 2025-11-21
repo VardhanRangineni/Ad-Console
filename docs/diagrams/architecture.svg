@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300">
+  <rect x="20" y="20" width="160" height="60" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="100" y="52" text-anchor="middle" font-family="Arial" font-size="12">Browser: React SPA</text>
+
+  <rect x="260" y="20" width="160" height="60" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="340" y="52" text-anchor="middle" font-family="Arial" font-size="12">IndexedDB</text>
+
+  <rect x="500" y="20" width="160" height="60" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="580" y="52" text-anchor="middle" font-family="Arial" font-size="12">Mock Backend</text>
+
+  <rect x="740" y="20" width="160" height="60" fill="#f8f9fa" stroke="#ced4da"/>
+  <text x="820" y="52" text-anchor="middle" font-family="Arial" font-size="12">Mock WebSocket / Devices</text>
+
+  <!-- Arrows -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#495057" />
+    </marker>
+  </defs>
+  <line x1="180" y1="50" x2="260" y2="50" stroke="#495057" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="420" y1="50" x2="500" y2="50" stroke="#495057" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="660" y1="50" x2="740" y2="50" stroke="#495057" stroke-width="2" marker-end="url(#arrow)" />
+
+  <text x="120" y="80" font-family="Arial" font-size="11" text-anchor="middle">UI React Routes & Pages</text>
+</svg>

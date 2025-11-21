@@ -109,15 +109,8 @@ The following sections explain how this project is structured, how the main flow
 
 This diagram describes the main runtime components and how they interact at a high level.
 
-```mermaid
-graph LR
-	Browser[Browser: User UI] -->|React App| UI[React SPA]
-	UI -->|IndexedDB read/write| DB[(IndexedDB)]
-	UI -->|API calls (mock)| MockBackend[Mock Backend]
-	MockBackend -->|notify| MockWebSocket[Mock WebSocket]
-	MockWebSocket -->|emits| DeviceSimulator[Device / Simulator (Monitor & DisplayPlayer)]
-	UI -->|Routes / Page components| Pages[AssignContent, ContentLibrary, Monitor, DeviceManagement]
-```
+View diagrams as images here:
+![Architecture diagram](docs/diagrams/architecture.svg)
 
 Notes:
 - The app is a client-side React Single Page App (SPA). For development and demo, it uses local mock services and local persistence in IndexedDB.
@@ -127,47 +120,13 @@ Notes:
 
 This diagram shows the major components and where they are used in the page structure.
 
-```mermaid
-graph TD
-	App[App (index.js)] --> Navbar
-	App --> AsideBar
-	App --> Router
-	Router --> AssignContent[AssignContent Page]
-	Router --> ContentLibrary[ContentLibrary Page]
-	Router --> DeviceManagement[Device Management Page]
-	AssignContent -->|Uses| FormComponents[Form Controls (react-select / Bootstrap)]
-	AssignContent -->|Uses| PlaylistPreview[ScreenSimulator / SlideshowPlayer]
-	ContentLibrary -->|Uses| CardComponents[ContentCard, List]
-	DeviceManagement -->|Uses| DeviceComponents
-```
+![Component diagram](docs/diagrams/components.svg)
 
 ### 3) Playlist lifecycle (data flow)
 
 This sequence diagram shows a typical playlist creation and assignment flow with validation and save.
 
-```mermaid
-sequenceDiagram
-	participant U as User
-	participant B as Browser UI
-	participant DB as IndexedDB
-	participant MB as Mock Backend
-	participant WS as Mock WebSocket
-	participant D as Device
-
-	U->>B: Open 'Create Playlist'
-	U->>B: Fill form (name, content items, territory)
-	B->>B: Validate inputs (playlist name, territory, time window if trigger)
-	opt Time validation OK
-		B->>DB: Save playlist (playlists store)
-		DB-->>B: return id
-		B->>MB: Notify backend of new playlist (mock)
-		MB->>WS: Publish to WebSocket for devices
-		WS->>D: Device receives update
-		D-->>B: Device status (via WebSocket) for Monitor page
-	else Time validation fails
-		B-->>U: Show validation error message
-	end
-```
+![Playlist lifecycle diagram](docs/diagrams/playlist-lifecycle.svg)
 
 ### 4) Trigger subtype and conditional UI behavior (time-based triggers)
 
