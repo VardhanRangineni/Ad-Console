@@ -47,7 +47,8 @@ function DeviceManagement() {
 
   // Download template for device assignments (fixes missing function error)
   const handleDownloadTemplate = () => {
-    const csvContent = 'Store ID,Device,MAC Address,State,City,Orientation\n';
+    // Updated template header to match new expected upload columns
+    const csvContent = 'Store ID,Device Type ID,Device MAC Address,POS MAC Address,Orientation\n';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -83,6 +84,8 @@ function DeviceManagement() {
   const [assignTabEditMode, setAssignTabEditMode] = React.useState(false);
   // Track staged changes for Assign tab (deactivate toggles)
   const [assignTabAssignments, setAssignTabAssignments] = React.useState([]);
+  // When true, the user is editing a specific store from the List View edit button
+  const [isEditFromListView, setIsEditFromListView] = React.useState(false);
 
   // Hierarchical store selection state (using storeList from PDF)
 
@@ -162,7 +165,7 @@ function DeviceManagement() {
       setDevicesForSelectedStore(storeData ? storeData.devices : []);
       // When a store is selected, initialize assignTabAssignments for editing
       setAssignTabAssignments(storeData ? storeData.devices.map(d => ({ ...d })) : []);
-      setAssignTabEditMode(false);
+        setAssignTabEditMode(false);
     } else {
       setDevicesForSelectedStore([]);
       setAssignTabAssignments([]);
@@ -428,12 +431,8 @@ function DeviceManagement() {
 
     // Create worksheet and add bold headers
     const headers = [
-      'Store ID', 'Store Name', 'City', 'State', 'Device Type', 'Device Type ID', 'MAC Address', 'Status', 'Orientation'
+      'Store ID', 'Store Name', 'City', 'State', 'Device Type', 'Device Type ID', 'MAC Address', 'POS MAC', 'Status', 'Orientation'
     ];
-    // Add POS MAC to headers if there is at least one device with posMac
-    if (dataToExport.some(d => d['POS MAC'])) {
-      headers.splice(7, 0, 'POS MAC');
-    }
     const worksheet = XLSX.utils.json_to_sheet([]);
     XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A1' });
     XLSX.utils.sheet_add_json(worksheet, dataToExport, { origin: 'A2', skipHeader: true });
@@ -463,20 +462,28 @@ function DeviceManagement() {
       const json = XLSX.utils.sheet_to_json(worksheet);
 
       const newAssignments = json.map((row, index) => {
-        const deviceName = row['Device'] ? String(row['Device']).trim() : '';
         const storeId = row['Store ID'] ? String(row['Store ID']).trim() : '';
-        const macAddress = row['MAC Address'] ? String(row['MAC Address']).trim() : '';
+        const deviceIdFromRow = row['Device Type ID'] ? String(row['Device Type ID']).trim() : (row['DeviceID'] ? String(row['DeviceID']).trim() : '');
+        const deviceNameFromRow = row['Device'] ? String(row['Device']).trim() : '';
+        const macAddress = (row['Device MAC Address'] || row['Device MAC'] || row['MAC Address'] || row['MAC']) ? String(row['Device MAC Address'] || row['Device MAC'] || row['MAC Address'] || row['MAC']).trim() : '';
+        const posMac = (row['POS MAC Address'] || row['POS MAC'] || row['POS Mac Adress'] || row['POS Mac Address']) ? String(row['POS MAC Address'] || row['POS MAC'] || row['POS Mac Adress'] || row['POS Mac Address']).trim() : '';
         let orientation = row['Orientation'] ? String(row['Orientation']).trim().toLowerCase() : '';
 
         // Map user-friendly terms to internal values
         if (orientation === 'landscape') orientation = 'horizontal';
         if (orientation === 'portrait') orientation = 'vertical';
 
-        if (!deviceName || !storeId || !macAddress) {
+        if (!storeId || !macAddress || (!deviceIdFromRow && !deviceNameFromRow)) {
           return null;
         }
 
-        const device = devices.find(d => d.name === deviceName);
+        let device = null;
+        if (deviceIdFromRow) {
+          device = devices.find(d => String(d.id) === deviceIdFromRow);
+        }
+        if (!device && deviceNameFromRow) {
+          device = devices.find(d => d.name === deviceNameFromRow);
+        }
         // Acceptable values: 'horizontal', 'vertical', 'both', or fallback to device.orientation
         let normalizedOrientation = orientation;
         if (!['horizontal', 'vertical', 'both'].includes(normalizedOrientation)) {
@@ -487,6 +494,7 @@ function DeviceManagement() {
           deviceId: device ? device.id : null,
           storeId: storeId,
           macAddress: macAddress,
+          posMacAddress: posMac || '',
           orientation: normalizedOrientation,
           active: true,
           originalRow: row, // Keep track for error reporting
@@ -497,7 +505,7 @@ function DeviceManagement() {
       const invalidAssignments = newAssignments.filter(a => a && !a.deviceId);
 
       if (invalidAssignments.length > 0) {
-        const invalidDevices = invalidAssignments.map(a => a.originalRow['Device']).join(', ');
+        const invalidDevices = invalidAssignments.map(a => (a.originalRow['Device'] || a.originalRow['Device Type ID'] || a.originalRow['DeviceID'] || JSON.stringify(a.originalRow))).join(', ');
         alert(`The following devices could not be found and were not assigned: ${invalidDevices}`);
       }
 
@@ -541,6 +549,7 @@ function DeviceManagement() {
     setActiveSubTab('listView');
     setSelectedStoreForAssignment(null);
     setAssignTabEditMode(false);
+    setIsEditFromListView(false);
   };
 
   // List View Edit button handler: go to Assign tab, select store, open assign form in edit mode
@@ -550,6 +559,7 @@ function DeviceManagement() {
     setSelectedStoreForAssignment({ value: store.id, label: `${store.name} (${store.id})` });
     setShowInlineAssignForm(true);
     setAssignTabEditMode(true);
+    setIsEditFromListView(true);
   };
 
   return (
@@ -590,6 +600,7 @@ function DeviceManagement() {
                 <Col md={7} style={{ width: '60%' }} className="d-flex align-items-end">
                   <Form.Group className="mb-3 flex-grow-1 me-2">
                     <Form.Label>Search for a Store by Id or Name</Form.Label>
+                    <div style={{ position: 'relative' }}>
                     <AsyncSelect
                       cacheOptions
                       defaultOptions={storeOptions.slice(0, 30)}
@@ -603,8 +614,15 @@ function DeviceManagement() {
                         setMacAddressToAssign('');
                         setPosMacToAssign('');
                         setOrientationToAssign('');
+                        // If user manually changes selection then they are not editing a specific store from List View
+                        setIsEditFromListView(false);
                       }}
+                      isDisabled={isEditFromListView}
                     />
+                    {isEditFromListView && (
+                      <span className="badge bg-secondary ms-2" style={{ position: 'absolute', right: -10, top: -8 }}>Editing Store</span>
+                    )}
+                    </div>
                   </Form.Group>
                 </Col>
               </Row>
@@ -680,30 +698,39 @@ function DeviceManagement() {
                                         <Form.Group>
                                         <Form.Label>Orientation</Form.Label>
                                         <div>
-                                          <Form.Check
-                                            inline
-                                            type="radio"
-                                            id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
-                                            label={<label htmlFor={`orientation-horizontal-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
-                                            name={`orientation-${selectedDeviceForAssignment.id}`}
-                                            value="horizontal"
-                                            checked={orientationToAssign === 'horizontal'}
-                                            onChange={e => setOrientationToAssign(e.target.value)}
-                                            disabled={selectedDeviceForAssignment.orientation !== 'both'}
-                                          />
-                                          <Form.Check
-                                            inline
-                                            type="radio"
-                                            id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
-                                            label={<label htmlFor={`orientation-vertical-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
-                                            name={`orientation-${selectedDeviceForAssignment.id}`}
-                                            value="vertical"
-                                            checked={orientationToAssign === 'vertical'}
-                                            onChange={e => setOrientationToAssign(e.target.value)}
-                                            disabled={selectedDeviceForAssignment.orientation !== 'both'}
-                                          />
-                                          {selectedDeviceForAssignment.orientation !== 'both' && (
-                                            <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                          {selectedDeviceForAssignment.orientation === 'both' ? (
+                                            <>
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
+                                                label={<label htmlFor={`orientation-horizontal-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
+                                                name={`orientation-${selectedDeviceForAssignment.id}`}
+                                                value="horizontal"
+                                                checked={orientationToAssign === 'horizontal'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
+                                                label={<label htmlFor={`orientation-vertical-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
+                                                name={`orientation-${selectedDeviceForAssignment.id}`}
+                                                value="vertical"
+                                                checked={orientationToAssign === 'vertical'}
+                                                onChange={e => setOrientationToAssign(e.target.value)}
+                                              />
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Form.Check
+                                                inline
+                                                type="radio"
+                                                id={`orientation-only-${selectedDeviceForAssignment.id}`}
+                                                label={selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}
+                                                checked
+                                                disabled
+                                              />                                            </>
                                           )}
                                         </div>
                                         </Form.Group>
@@ -745,30 +772,33 @@ function DeviceManagement() {
                                 <td>{device.posMacAddress || <span className="text-muted">-</span>}</td>
                                 <td>
                                   <div className="d-flex gap-2 align-items-center">
-                                    <Form.Check
-                                      inline
-                                      type="radio"
-                                      id={`assign-orientation-horizontal-${device.assignmentId}`}
-                                      name={`assign-orientation-${device.assignmentId}`}
-                                      value="horizontal"
-                                      label="Landscape"
-                                      checked={device.orientation === 'horizontal'}
-                                      disabled={!(assignTabEditMode && device.orientation === 'both')}
-                                      onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'horizontal' } : d))}
-                                    />
-                                    <Form.Check
-                                      inline
-                                      type="radio"
-                                      id={`assign-orientation-vertical-${device.assignmentId}`}
-                                      name={`assign-orientation-${device.assignmentId}`}
-                                      value="vertical"
-                                      label="Portrait"
-                                      checked={device.orientation === 'vertical'}
-                                      disabled={!(assignTabEditMode && device.orientation === 'both')}
-                                      onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'vertical' } : d))}
-                                    />
-                                    {device.orientation !== 'both' && (
-                                      <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                    {assignTabEditMode && device.orientation === 'both' ? (
+                                      <>
+                                        <Form.Check
+                                          inline
+                                          type="radio"
+                                          id={`assign-orientation-horizontal-${device.assignmentId}`}
+                                          name={`assign-orientation-${device.assignmentId}`}
+                                          value="horizontal"
+                                          label="Landscape"
+                                          checked={device.orientation === 'horizontal'}
+                                          onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'horizontal' } : d))}
+                                        />
+                                        <Form.Check
+                                          inline
+                                          type="radio"
+                                          id={`assign-orientation-vertical-${device.assignmentId}`}
+                                          name={`assign-orientation-${device.assignmentId}`}
+                                          value="vertical"
+                                          label="Portrait"
+                                          checked={device.orientation === 'vertical'}
+                                          onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'vertical' } : d))}
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="text-muted small">{device.orientation === 'both' ? 'Both' : (device.orientation === 'horizontal' ? 'Landscape' : (device.orientation === 'vertical' ? 'Portrait' : 'N/A'))}</span>
+                                      </>
                                     )}
                                   </div>
                                 </td>
@@ -878,30 +908,38 @@ function DeviceManagement() {
                                     <Form.Group>
                                     <Form.Label>Orientation</Form.Label>
                                     <div>
-                                      <Form.Check
-                                        inline
-                                        type="radio"
-                                        id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
-                                        label="Landscape"
-                                        name={`orientation-${selectedDeviceForAssignment.id}`}
-                                        value="horizontal"
-                                        checked={orientationToAssign === 'horizontal'}
-                                        onChange={e => setOrientationToAssign(e.target.value)}
-                                        disabled={selectedDeviceForAssignment.orientation !== 'both'}
-                                      />
-                                      <Form.Check
-                                        inline
-                                        type="radio"
-                                        id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
-                                        label="Portrait"
-                                        name={`orientation-${selectedDeviceForAssignment.id}`}
-                                        value="vertical"
-                                        checked={orientationToAssign === 'vertical'}
-                                        onChange={e => setOrientationToAssign(e.target.value)}
-                                        disabled={selectedDeviceForAssignment.orientation !== 'both'}
-                                      />
-                                      {selectedDeviceForAssignment.orientation !== 'both' && (
-                                      <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                      {selectedDeviceForAssignment.orientation === 'both' ? (
+                                        <>
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
+                                            label="Landscape"
+                                            name={`orientation-${selectedDeviceForAssignment.id}`}
+                                            value="horizontal"
+                                            checked={orientationToAssign === 'horizontal'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                          />
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
+                                            label="Portrait"
+                                            name={`orientation-${selectedDeviceForAssignment.id}`}
+                                            value="vertical"
+                                            checked={orientationToAssign === 'vertical'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                          />
+                                        </>
+                                      ) : (
+                                        <Form.Check
+                                          inline
+                                          type="radio"
+                                          id={`orientation-only-${selectedDeviceForAssignment.id}`}
+                                          label={selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}
+                                          checked
+                                          disabled
+                                        />
                                       )}
                                     </div>
                                     </Form.Group>
