@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Table, Button, Modal, Tabs, Tab, Form, Alert } from 'react-bootstrap';
+import { Table, Button, Modal, Tabs, Tab, Form, Alert, Badge } from 'react-bootstrap';
 import Select from 'react-select';
 import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
 import { productList } from '../../data/productList';
@@ -19,6 +19,8 @@ function ContentLibrary() {
   const [selectedProductOptions, setSelectedProductOptions] = useState([]);
   const [productInputError, setProductInputError] = useState('');
   const [newContentName, setNewContentName] = useState('');
+  // New: content type selection in Add modal: 'image' or 'video'
+  const [newContentType, setNewContentType] = useState('image');
   const [newImages, setNewImages] = useState([]);
   const [newVideos, setNewVideos] = useState([]);
   const [addError, setAddError] = useState('');
@@ -359,6 +361,7 @@ function ContentLibrary() {
     setAddError('');
     setProductIdInput('');
     setSelectedProductOptions([]);
+    setNewContentType('image');
   };
   const closeAddModal = () => {
     setShowAddModal(false);
@@ -368,19 +371,32 @@ function ContentLibrary() {
     setAddError('');
     setProductIdInput('');
     setSelectedProductOptions([]);
+    setNewContentType('image');
   };
   const handleAddMedia = (e) => {
     const files = Array.from(e.target.files);
-    const images = files.filter(f => f.type.startsWith('image/'));
-    const videos = files.filter(f => f.type.startsWith('video/'));
-    if (images.length > 0 && videos.length > 0) {
-      setMediaTypeError('You can only upload images or videos, not both.');
-      setNewImages([]);
-      setNewVideos([]);
-    } else {
-      setMediaTypeError('');
+    if (newContentType === 'image') {
+      const images = files.filter(f => f.type.startsWith('image/'));
+      if (images.length !== files.length) {
+        setMediaTypeError('Please upload only images for the Image content type.');
+        setNewImages([]);
+        setNewVideos([]);
+        return;
+      }
       setNewImages(images);
+      setNewVideos([]);
+      setMediaTypeError('');
+    } else {
+      const videos = files.filter(f => f.type.startsWith('video/'));
+      if (videos.length !== files.length) {
+        setMediaTypeError('Please upload only videos for the Video content type.');
+        setNewImages([]);
+        setNewVideos([]);
+        return;
+      }
       setNewVideos(videos);
+      setNewImages([]);
+      setMediaTypeError('');
     }
   };
   const handleAddContent = async () => {
@@ -392,15 +408,11 @@ function ContentLibrary() {
       setAddError('Content name is required.');
       return;
     }
-    if (newImages.length === 0 && newVideos.length === 0) {
-      setAddError('At least one image or video is required.');
+    if ((newContentType === 'image' && newImages.length === 0) || (newContentType === 'video' && newVideos.length === 0)) {
+      setAddError(`At least one ${newContentType === 'image' ? 'image' : 'video'} is required.`);
       return;
     }
-    // Only allow one type
-    if (newImages.length > 0 && newVideos.length > 0) {
-      setAddError('You can only upload images or videos, not both.');
-      return;
-    }
+    // No need to check both types due to content type selection
     // Validation: check if all images match available device resolutions
     if (mediaResolutions.length > 0 && deviceResolutions) {
       const allDeviceSizes = [
@@ -454,8 +466,8 @@ function ContentLibrary() {
       }))
     ]);
     const slidesFiltered = slides.filter(Boolean);
-    const isVideo = slidesFiltered.some(s => s.type === 'video');
-    const isSlideshow = !isVideo && slidesFiltered.length > 1;
+    // Determine whether the content is video or image based on user selection
+    const isVideo = newContentType === 'video';
     // If video, set top-level duration for compatibility
     let duration = undefined;
     if (slidesFiltered.length > 0 && slidesFiltered[0].type === 'video') {
@@ -466,7 +478,7 @@ function ContentLibrary() {
       id,
       title: newContentName,
       active: true,
-      type: isVideo ? 'video' : isSlideshow ? 'slideshow' : 'image',
+      type: isVideo ? 'video' : 'image',
       slides: slidesFiltered,
       ...(duration ? { duration } : {})
       , products: (selectedProductOptions.length > 0 ? selectedProductOptions.map(p => p.value) : [])
@@ -517,21 +529,21 @@ function ContentLibrary() {
         <div className="row">
           <div className="col-12">
             <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-4">
-              <Tab eventKey="active" title={<span className="fw-semibold">Active Content</span>}>
+              <Tab eventKey="active" title={<span className="fw-semibold">Active</span>}>
                 <div className="table-responsive rounded shadow-sm bg-white p-3">
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                          <th>Record ID</th>
-                          <th>Content Name</th>
-                          <th>Number of Images</th>
-                          <th>Products</th>
-                          <th>Action</th>
-                        </tr>
+                            <th>Content ID</th>
+                            <th>Content Name</th>
+                            <th>Content Type</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                          </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
-                        <tr><td colSpan={4} className="text-center text-muted">No content found</td></tr>
+                        <tr><td colSpan={5} className="text-center text-muted">No content found</td></tr>
                       ) : filteredContent.map(content => (
                         <tr key={content.id}>
                           <td>
@@ -543,8 +555,12 @@ function ContentLibrary() {
                             </span>
                           </td>
                           <td>{content.title}</td>
-                          <td>{content.slides ? content.slides.length : 1}</td>
-                          <td>{Array.isArray(content.products) ? content.products.length : 0}</td>
+                          <td>{content.type === 'video' ? 'Video' : 'Image'}</td>
+                          <td>
+                            <Badge bg={content.active !== false ? 'success' : 'danger'}>
+                              {content.active !== false ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                               <Form.Check
@@ -582,26 +598,30 @@ function ContentLibrary() {
                   </Table>
                 </div>
               </Tab>
-              <Tab eventKey="inactive" title={<span className="fw-semibold">Inactive Content</span>}>
+              <Tab eventKey="inactive" title={<span className="fw-semibold">Inactive</span>}>
                 <div className="table-responsive rounded shadow-sm bg-white p-3">
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                          <th>Record ID</th>
-                          <th>Content Name</th>
-                          <th>Number of Images</th>
-                          <th>Products</th>
-                        </tr>
+                            <th>Content ID</th>
+                            <th>Content Name</th>
+                            <th>Content Type</th>
+                            <th>Status</th>
+                          </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
-                        <tr><td colSpan={3} className="text-center text-muted">No content found</td></tr>
+                        <tr><td colSpan={4} className="text-center text-muted">No content found</td></tr>
                       ) : filteredContent.map(content => (
                         <tr key={content.id}>
                           <td>{content.id}</td>
                           <td>{content.title}</td>
-                          <td>{content.slides ? content.slides.length : 1}</td>
-                          <td>{Array.isArray(content.products) ? content.products.length : 0}</td>
+                          <td>{content.type === 'video' ? 'Video' : 'Image'}</td>
+                          <td>
+                            <Badge bg={content.active !== false ? 'success' : 'danger'}>
+                              {content.active !== false ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -705,19 +725,8 @@ function ContentLibrary() {
                 {/* Product association for edit modal */}
                 <div className="mb-3">
                   <Form.Group>
-                    <Form.Label>Associate Products</Form.Label>
+                    <Form.Label>Associated Products</Form.Label>
                     <div>
-                      <div>
-                        <Select
-                          isMulti
-                          options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                          value={editSelectedProductOptions}
-                          onChange={handleEditProductsChange}
-                          placeholder="Select products..."
-                          classNamePrefix="react-select"
-                        />
-                      </div>
-                      <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}>or</div>
                       <div style={{ minWidth: 320 }}>
                         <Form.Control
                           type="text"
@@ -783,7 +792,19 @@ function ContentLibrary() {
                         {editProductInputError && <div className="text-danger mt-2">{editProductInputError}</div>}
                       </div>
                     </div>
-                    <Form.Text className="text-muted">Use the product ID input (supports comma-separated IDs) to quickly add products to the multi-select for this content.</Form.Text>
+                          <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
+                    <div>
+                        <Select
+                          isMulti
+                          isSearchable={false}
+                          menuIsOpen={false}
+                          options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                          value={editSelectedProductOptions}
+                          onChange={handleEditProductsChange}
+                          placeholder="Select products..."
+                          classNamePrefix="react-select"
+                        />
+                      </div>
                   </Form.Group>
                 </div>
               </>
@@ -870,32 +891,52 @@ function ContentLibrary() {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Upload Images or Videos</Form.Label>
+                <Form.Label>Content Type</Form.Label>
+                <div>
+                  <Form.Check
+                    inline
+                    type="radio"
+                    id="content-type-image"
+                    label="Image"
+                    value="image"
+                    checked={newContentType === 'image'}
+                    onChange={() => {
+                      setNewContentType('image');
+                      setNewVideos([]); // clear any existing kept videos when switching
+                      setMediaTypeError('');
+                    }}
+                  />
+                  <Form.Check
+                    inline
+                    type="radio"
+                    id="content-type-video"
+                    label="Video"
+                    value="video"
+                    checked={newContentType === 'video'}
+                    onChange={() => {
+                      setNewContentType('video');
+                      setNewImages([]); // clear any existing kept images when switching
+                      setMediaTypeError('');
+                    }}
+                  />
+                </div>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Upload {newContentType === 'image' ? 'Images' : 'Videos'}</Form.Label>
                 <Form.Control
                   type="file"
-                  accept="image/*,video/*"
+                  accept={newContentType === 'image' ? 'image/*' : 'video/*'}
                   multiple
                   onChange={handleAddMedia}
                 />
                 <Form.Text className="text-muted">
-                  You can select multiple images or multiple videos, but not both at the same time.
+                  You can select multiple {newContentType === 'image' ? 'images' : 'videos'} for this content type.
                 </Form.Text>
                 {mediaTypeError && <div className="text-danger mt-1">{mediaTypeError}</div>}
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Associate Products</Form.Label>
+                <Form.Label>Associated Products</Form.Label>
                 <div>
-                  <div>
-                    <Select
-                      isMulti
-                      options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                      value={selectedProductOptions}
-                      onChange={opts => setSelectedProductOptions(opts || [])}
-                      placeholder="Select products..."
-                      classNamePrefix="react-select"
-                    />
-                  </div>
-                  <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}>or</div>
                   <div style={{ minWidth: 320 }}>
                     <Form.Control
                       type="text"
@@ -947,8 +988,20 @@ function ContentLibrary() {
                     />
                     {productInputError && <div className="text-danger mt-2">{productInputError}</div>}
                   </div>
+                                    <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
+                   <div>
+                    <Select
+                      isMulti
+                      isSearchable={false}
+                      menuIsOpen={false}
+                      options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                      value={selectedProductOptions}
+                      onChange={opts => setSelectedProductOptions(opts || [])}
+                      placeholder="Select products..."
+                      classNamePrefix="react-select"
+                    />
+                  </div>
                 </div>
-                <Form.Text className="text-muted">Use the product ID input (supports comma-separated IDs) to quickly add products to the multi-select.</Form.Text>
               </Form.Group>
               {mediaResolutions.length > 0 && (
                 <div className="mb-3">
