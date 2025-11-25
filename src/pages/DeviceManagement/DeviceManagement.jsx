@@ -4,6 +4,7 @@ import { getAllAssignments, deleteAssignment, bulkAddAssignments } from '../../s
 import React, { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Row, Col, Button, Form, InputGroup, Modal, Alert, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import * as XLSX from 'xlsx';
 // import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
 // import { getAllContent } from '../../services/indexeddb';
@@ -187,6 +188,35 @@ function DeviceManagement() {
     const saved = localStorage.getItem('disabledDevices');
     return saved ? JSON.parse(saved) : [];
   });
+
+    function orientationLabel(orientation) {
+      if (!orientation) return 'Both';
+      const o = String(orientation).toLowerCase();
+      if (o === 'horizontal') return 'Landscape';
+      if (o === 'vertical') return 'Portrait';
+      return 'Both';
+    }
+
+    const handleDownloadDeviceTypes = () => {
+      // Build data copy same as table displayed
+        const data = (devices || []).map((d, idx) => {
+          const isDisabled = (typeof d.active === 'boolean') ? !d.active : disabledDevices.includes(d.id);
+          const statusLabel = isDisabled ? 'Inactive' : 'Active';
+          return ({
+        'Device Type ID': d.id,
+        'Device Type': d.name || '-',
+        'Possible Orientations': orientationLabel(d.orientation || 'both'),
+        'Resolution (W × H)': `${(d.resolution && d.resolution.width) || 1920} × ${(d.resolution && d.resolution.height) || 1080}`,
+        'Created By': d.createdBy || generateCreatorId(d, idx),
+          'Created On': d.createdAt ? formatDateShort(d.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000))),
+          'Status': statusLabel
+        });
+        });
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'DeviceTypes');
+      XLSX.writeFile(workbook, 'device-types.xlsx');
+    };
 
   // Disable device handler
   const handleToggleDisableDevice = async (deviceId, isCurrentlyDisabled) => {
@@ -478,9 +508,15 @@ function DeviceManagement() {
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div></div>
-            <Button variant="primary" onClick={() => { setShowAddModal(true); setIsClone(false); setNewDeviceName(''); setNewDeviceNameError(''); setNewDeviceOrientation('both'); setNewDeviceResolutionWidth('1920'); setNewDeviceResolutionHeight('1080'); }}>
-              Add Device Type
-            </Button>
+            <div style={{ display: 'inline-flex', gap: 8 }}>
+              <Button variant="secondary" onClick={handleDownloadDeviceTypes} disabled={!devices || devices.length === 0}>
+                <i className="bi bi-download me-2"></i>
+                Download
+              </Button>
+              <Button variant="primary" onClick={() => { setShowAddModal(true); setIsClone(false); setNewDeviceName(''); setNewDeviceNameError(''); setNewDeviceOrientation('both'); setNewDeviceResolutionWidth('1920'); setNewDeviceResolutionHeight('1080'); }}>
+                Add Device Type
+              </Button>
+            </div>
           </div>
           <div className="d-flex justify-content-between align-items-center mb-4">
         <h4>

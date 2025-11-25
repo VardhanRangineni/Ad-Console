@@ -419,7 +419,7 @@ function DeviceManagement() {
             'DeviceID': device.id,
             'MAC Address': device.macAddress,
             'POS MAC': device.posMacAddress || '',
-            'Status': device.active ? 'Active' : 'Inactive',
+            'Status': device.active ? 'Online' : 'Offline',
             'Orientation': device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A'),
           });
         });
@@ -428,7 +428,7 @@ function DeviceManagement() {
 
     // Create worksheet and add bold headers
     const headers = [
-      'Store ID', 'Store Name', 'City', 'State', 'Device', 'DeviceID', 'MAC Address', 'Status', 'Orientation'
+      'Store ID', 'Store Name', 'City', 'State', 'Device Type', 'Device Type ID', 'MAC Address', 'Status', 'Orientation'
     ];
     // Add POS MAC to headers if there is at least one device with posMac
     if (dataToExport.some(d => d['POS MAC'])) {
@@ -774,7 +774,7 @@ function DeviceManagement() {
                                 </td>
                                 <td>
                                   <Badge bg={device.active ? 'success' : 'danger'}>
-                                    {device.active ? 'Active' : 'Inactive'}
+                                    {device.active ? 'Online' : 'Offline'}
                                   </Badge>
                                 </td>
                                 <td className="d-flex gap-2 align-items-center">
@@ -787,7 +787,7 @@ function DeviceManagement() {
                                         d.assignmentId === device.assignmentId ? { ...d, active: !d.active } : d
                                       ));
                                     }}
-                                    label={device.active ? 'Active' : 'Inactive'}
+                                    label={device.active ? 'Online' : 'Offline'}
                                   />
                                   <OverlayTrigger
                                     placement="top"
