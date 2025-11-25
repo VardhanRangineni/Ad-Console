@@ -61,3 +61,43 @@ export async function deleteContent(id) {
   }
   return res;
 }
+
+// Playlists helpers
+export async function addPlaylist(playlist) {
+  const db = await getDB();
+  const id = await db.add(PLAYLIST_STORE, playlist);
+  try {
+    addAction({ actionType: 'playlist.add', actor: 'system', message: 'Playlist added', details: { playlistId: id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return id;
+}
+
+export async function getAllPlaylists() {
+  const db = await getDB();
+  if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return [];
+  return db.getAll(PLAYLIST_STORE);
+}
+
+export async function updatePlaylist(playlist) {
+  const db = await getDB();
+  const res = await db.put(PLAYLIST_STORE, playlist);
+  try {
+    addAction({ actionType: 'playlist.update', actor: 'system', message: 'Playlist updated', details: { playlistId: playlist.id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return res;
+}
+
+export async function deletePlaylist(id) {
+  const db = await getDB();
+  const res = await db.delete(PLAYLIST_STORE, id);
+  try {
+    addAction({ actionType: 'playlist.delete', actor: 'system', message: 'Playlist deleted', details: { playlistId: id } });
+  } catch (err) {
+    console.error('activity log error', err);
+  }
+  return res;
+}

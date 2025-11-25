@@ -85,7 +85,7 @@ function DeviceManagement() {
           id: storeId,
           name: storeDetails ? storeDetails.name : assignment.storeName || 'Unknown Store',
           area: storeDetails ? storeDetails.area : assignment.area || '',
-          state: storeDetails ? storeDetails.state : assignment.state || '',
+          state: storeDetails ? (storeDetails.state && String(storeDetails.state).trim()) : (assignment.state && String(assignment.state).trim()) || '',
           deviceCount: 0,
           devices: [] // This will hold device instances with assignment info
         };
@@ -385,7 +385,40 @@ function DeviceManagement() {
                         <td>{device.id}</td>
                         <td className="font-monospace small">{device.name}</td>
                         <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
-                        <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}</td>
+                        <td>
+                          <div className="d-flex gap-2 align-items-center">
+                            <Form.Check
+                              inline
+                              type="radio"
+                              id={`orient-both-${device.id}`}
+                              name={`orientation-${device.id}`}
+                              value="both"
+                              label="Both"
+                              checked={device.orientation === 'both'}
+                              disabled
+                            />
+                            <Form.Check
+                              inline
+                              type="radio"
+                              id={`orient-horizontal-${device.id}`}
+                              name={`orientation-${device.id}`}
+                              value="horizontal"
+                              label="Landscape"
+                              checked={device.orientation === 'horizontal'}
+                              disabled
+                            />
+                            <Form.Check
+                              inline
+                              type="radio"
+                              id={`orient-vertical-${device.id}`}
+                              name={`orientation-${device.id}`}
+                              value="vertical"
+                              label="Portrait"
+                              checked={device.orientation === 'vertical'}
+                              disabled
+                            />
+                          </div>
+                        </td>
                         <td>
                           {/* Disable/Enable Toggle Switch */}
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>

@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import AsyncSelect from 'react-select/async';
+import * as XLSX from 'xlsx';
+import { productList } from '../../data/productList';
 import { Button, Form, Alert, Table } from 'react-bootstrap';
 import { storeList } from '../../data/storeList';
 
@@ -38,6 +40,7 @@ function AssignContent() {
 	const [playlistType, setPlaylistType] = useState('regular');
 	// Trigger interval in minutes (default 5)
 	const [triggerInterval, setTriggerInterval] = useState(5);
+	const [triggerIntervalError, setTriggerIntervalError] = useState('');
 	// Trigger time window (start/stop) in 12-hour format components
 	const [triggerStartHour, setTriggerStartHour] = useState('08');
 	const [triggerStartMinute, setTriggerStartMinute] = useState('00');
@@ -50,6 +53,19 @@ function AssignContent() {
 	// Options: 'time' (time-based triggers), future: 'sensor', 'event', etc.
 	const [triggerSubType, setTriggerSubType] = useState('');
 
+	// Customer-based trigger states
+	const [customerTriggerMode, setCustomerTriggerMode] = useState('all'); // 'all' or 'specific'
+	const [customerIds, setCustomerIds] = useState([]);
+	const [customerFileName, setCustomerFileName] = useState('');
+	const [customerParseError, setCustomerParseError] = useState('');
+	const [triggerAt, setTriggerAt] = useState('customer-selection'); // 'customer-selection' or 'invoice-generation'
+
+	// Product-based trigger states
+	const [productIds, setProductIds] = useState([]);
+	const [productFileName, setProductFileName] = useState('');
+	const [productParseError, setProductParseError] = useState('');
+	const [productTriggerAt, setProductTriggerAt] = useState('add-to-cart'); // 'add-to-cart' or 'invoice-generation'
+
 	// helper: convert 12-hour to minutes since midnight
 	const convert12ToMinutes = (hourStr, minuteStr, ampmStr) => {
 		const h = Number(hourStr) % 12; // convert 12 to 0
@@ -57,6 +73,87 @@ function AssignContent() {
 		const ampm = (ampmStr || 'AM').toUpperCase();
 		const hh = h + (ampm === 'PM' ? 12 : 0);
 		return hh * 60 + m;
+	};
+
+	// Helpers: CSV and Excel parsing to extract first-column values
+	function normalizeAndDedupeIds(arr) {
+		if (!Array.isArray(arr)) return [];
+		const set = new Set();
+		arr.forEach(i => {
+			if (!i) return;
+			const v = String(i).trim();
+			if (v) set.add(v);
+		});
+		return Array.from(set);
+	}
+
+	async function parseExcelToIds(file) {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				try {
+					const data = new Uint8Array(e.target.result);
+					const workbook = XLSX.read(data, { type: 'array' });
+					const firstSheetName = workbook.SheetNames[0];
+					const worksheet = workbook.Sheets[firstSheetName];
+					const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+					// Extract first column values
+					const ids = json.map(r => r && r[0] !== undefined ? String(r[0]) : '').filter(Boolean);
+					resolve(normalizeAndDedupeIds(ids));
+				} catch (err) {
+					reject(err);
+				}
+			};
+			reader.onerror = (err) => reject(err);
+			reader.readAsArrayBuffer(file);
+		});
+	}
+
+	async function parseCsvToIds(text) {
+		// Simple CSV parser: split lines and take first column
+		const rows = text.split(/\r?\n/).map(r => r.split(',')[0] || '').filter(Boolean);
+		return normalizeAndDedupeIds(rows);
+	}
+
+	// File handlers for uploads (inside component scope)
+	const handleCustomerFileUpload = async (file) => {
+		if (!file) return;
+		try {
+			setCustomerFileName(file.name);
+			setCustomerParseError('');
+			if (file.name.match(/\.xlsx?$|\.xls$/i)) {
+				const ids = await parseExcelToIds(file);
+				setCustomerIds(ids);
+			} else {
+				const txt = await file.text();
+				const ids = await parseCsvToIds(txt);
+				setCustomerIds(ids);
+			}
+		} catch (err) {
+			console.error('Failed to parse customer file', err);
+			setCustomerParseError('Failed to parse file');
+			setCustomerIds([]);
+		}
+	};
+
+	const handleProductFileUpload = async (file) => {
+		if (!file) return;
+		try {
+			setProductFileName(file.name);
+			setProductParseError('');
+			if (file.name.match(/\.xlsx?$|\.xls$/i)) {
+				const ids = await parseExcelToIds(file);
+				setProductIds(ids);
+			} else {
+				const txt = await file.text();
+				const ids = await parseCsvToIds(txt);
+				setProductIds(ids);
+			}
+		} catch (err) {
+			console.error('Failed to parse product file', err);
+			setProductParseError('Failed to parse file');
+			setProductIds([]);
+		}
 	};
 
 	const computeTriggerTimeValidity = () => {
@@ -217,6 +314,16 @@ function AssignContent() {
 				if (row.triggerSubType) setTriggerSubType(row.triggerSubType);
 				else if (row.triggerStartAt || row.triggerStopAt || row.triggerInterval) setTriggerSubType('time');
 				else setTriggerSubType('');
+			}
+			// Prefill customer/product trigger options when editing
+			if (row.type === 'trigger') {
+				if (row.customerTriggerMode) setCustomerTriggerMode(row.customerTriggerMode);
+				if (row.customerIds) setCustomerIds(Array.isArray(row.customerIds) ? [...row.customerIds] : (row.customerIds ? [row.customerIds] : []));
+				if (row.customerFileName) setCustomerFileName(row.customerFileName);
+				if (row.triggerAt) setTriggerAt(row.triggerAt);
+				if (row.productIds) setProductIds(Array.isArray(row.productIds) ? [...row.productIds] : (row.productIds ? [row.productIds] : []));
+				if (row.productFileName) setProductFileName(row.productFileName);
+				if (row.productTriggerAt) setProductTriggerAt(row.productTriggerAt);
 			}
 			// Prefill trigger start/stop values if present
 			if (row.triggerStartAt) {
@@ -451,6 +558,7 @@ function AssignContent() {
 									/>
 								</Form.Group>
 							)}
+							{/* Customer & Product trigger UI (moved to Trigger Type section) */}
 
 							{territoryType === 'city' && (
 								<>
@@ -655,9 +763,64 @@ function AssignContent() {
 									>
 										<option value="">Select trigger type...</option>
 										<option value="time">Time-based trigger</option>
+										<option value="customer">Customer-based trigger</option>
+										<option value="product">Product-based trigger</option>
+										
 									</Form.Select>
 								</div>
-								{/* Only show time-based trigger controls when selected */}
+								{/* Insert customer & product UI directly under Trigger Type select */}
+								{triggerSubType === 'customer' && (
+									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
+										<Form.Label style={{ fontWeight: 'bold' }}>Customer-based trigger</Form.Label>
+										<div className="mb-2 d-flex gap-3 align-items-center">
+											<Form.Check inline type="radio" id="customer-all" name="customerTriggerMode" label={<label htmlFor="customer-all" style={{ whiteSpace: 'nowrap' }}>All customers</label>} checked={customerTriggerMode === 'all'} onChange={() => setCustomerTriggerMode('all')} disabled={isReadOnly} />
+											<Form.Check inline type="radio" id="customer-specific" name="customerTriggerMode" label={<label htmlFor="customer-specific" style={{ whiteSpace: 'nowrap' }}>Few / Specific customers</label>} checked={customerTriggerMode === 'specific'} onChange={() => setCustomerTriggerMode('specific')} disabled={isReadOnly} />
+										</div>
+										{customerTriggerMode === 'specific' && (
+											<div className="mb-2">
+												<Form.Label style={{ fontWeight: 600 }}>Upload CSV/Excel with customer IDs (first column)</Form.Label>
+												<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleCustomerFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
+												{customerFileName && <div className="small mt-1">Uploaded: {customerFileName} — {customerIds.length} ID(s)</div>}
+												{customerParseError && <Alert variant="danger" className="mt-2">{customerParseError}</Alert>}
+												{customerIds.length > 0 && (
+													<div className="mt-2 small text-muted">Preview: {customerIds.slice(0, 10).join(', ')}{customerIds.length > 10 ? `, +${customerIds.length - 10} more` : ''}</div>
+												)}
+											</div>
+										)}
+										<div className="mb-2">
+											<Form.Label style={{ fontWeight: 'bold' }}>Trigger At</Form.Label>
+											<div className="d-flex gap-3 align-items-center">
+												<Form.Check inline type="radio" id="triggerAt-selection" name="triggerAt" label={<label htmlFor="triggerAt-selection" style={{ whiteSpace: 'nowrap' }}>Customer selection</label>} checked={triggerAt === 'customer-selection'} onChange={() => setTriggerAt('customer-selection')} disabled={isReadOnly} />
+												<Form.Check inline type="radio" id="triggerAt-invoice" name="triggerAt" label={<label htmlFor="triggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={triggerAt === 'invoice-generation'} onChange={() => setTriggerAt('invoice-generation')} disabled={isReadOnly} />
+											</div>
+										</div>
+									</div>
+								)}
+
+								{triggerSubType === 'product' && (
+									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
+										<Form.Label style={{ fontWeight: 'bold' }}>Product-based trigger</Form.Label>
+										<div className="mb-2">
+											<Form.Label style={{ fontWeight: 600 }}>Upload CSV/Excel with product IDs (first column)</Form.Label>
+											<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleProductFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
+											{productFileName && <div className="small mt-1">Uploaded: {productFileName} — {productIds.length} ID(s)</div>}
+											{productParseError && <Alert variant="danger" className="mt-2">{productParseError}</Alert>}
+											{productIds.length > 0 && (
+												<div className="mt-2 small text-muted">Preview: {productIds.slice(0, 10).join(', ')}{productIds.length > 10 ? `, +${productIds.length - 10} more` : ''}</div>
+											)}
+											{productIds.length > 0 && (
+												<div className="mt-2 small text-muted">Names: {productIds.slice(0, 6).map(pid => (productList.find(p => p.id === pid) || { name: 'Unknown' }).name).join(', ')}{productIds.length > 6 ? `, +${productIds.length - 6} more` : ''}</div>
+											)}
+											<div className="mb-2">
+												<Form.Label style={{ fontWeight: 'bold' }}>Trigger At</Form.Label>
+												<div className="d-flex gap-3 align-items-center">
+													<Form.Check inline type="radio" id="productTriggerAt-add" name="productTriggerAt" label={<label htmlFor="productTriggerAt-add" style={{ whiteSpace: 'nowrap' }}>Add to cart</label>} checked={productTriggerAt === 'add-to-cart'} onChange={() => setProductTriggerAt('add-to-cart')} disabled={isReadOnly} />
+													<Form.Check inline type="radio" id="productTriggerAt-invoice" name="productTriggerAt" label={<label htmlFor="productTriggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={productTriggerAt === 'invoice-generation'} onChange={() => setProductTriggerAt('invoice-generation')} disabled={isReadOnly} />
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
 								{triggerSubType === 'time' && (
 									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
 										<div className="row mb-2 align-items-center">
@@ -667,19 +830,33 @@ function AssignContent() {
 											<div className="col-9 col-md-auto">
 												<Form.Control
 													type="number"
-													min={5}
-													step={5}
+													min={1}
+													step={1}
 													value={triggerInterval}
 													onChange={e => {
-														let val = parseInt(e.target.value, 10);
-														if (isNaN(val) || val < 5) val = 5;
-														// Always round to nearest lower multiple of 5
-														val = Math.floor(val / 5) * 5;
-														setTriggerInterval(val);
+														const raw = e.target.value;
+														const parsed = parseInt(raw, 10);
+														if (raw === '' || isNaN(parsed)) {
+															setTriggerInterval('');
+															setTriggerIntervalError('Please enter a number');
+															return;
+														}
+														setTriggerInterval(parsed);
+														if (parsed < 5) {
+															setTriggerIntervalError('Interval must be at least 5 minutes');
+														} else if (parsed % 5 !== 0) {
+															setTriggerIntervalError('Interval must be a multiple of 5 minutes');
+														} else {
+															setTriggerIntervalError('');
+														}
 													}}
 													style={{ width: 100 }}
 													disabled={isReadOnly}
+													isInvalid={!!triggerIntervalError}
 												/>
+												<Form.Control.Feedback type="invalid">
+													{triggerIntervalError}
+												</Form.Control.Feedback>
 											</div>
 											<div className="col-auto">
 												<span>minutes</span>
@@ -1006,6 +1183,18 @@ function AssignContent() {
 												alert('Please select a trigger type.');
 												return;
 											}
+											if (playlistType === 'trigger' && triggerSubType === 'customer') {
+												if (customerTriggerMode === 'specific' && (!customerIds || customerIds.length === 0)) {
+													alert('Please upload a CSV/Excel with customer IDs for specific customer trigger.');
+													return;
+												}
+											}
+										if (playlistType === 'trigger' && triggerSubType === 'product') {
+											if (!productIds || productIds.length === 0) {
+												alert('Please upload a CSV/Excel with product IDs for product trigger.');
+												return;
+											}
+										}
 										}
 										if (playlistType === 'trigger' && triggerSubType === 'time') {
 											let ti = Number(triggerInterval);
@@ -1025,7 +1214,18 @@ function AssignContent() {
 
 										// Build common playlist object data
 										const type = playlistType === 'trigger' ? 'trigger' : 'regular';
-										const triggerOptions = playlistType === 'trigger' ? (triggerSubType === 'time' ? { triggerInterval, triggerStartAt: `${parseInt(triggerStartHour,10)}:${triggerStartMinute} ${triggerStartAmPm}`, triggerStopAt: `${parseInt(triggerStopHour,10)}:${triggerStopMinute} ${triggerStopAmPm}`, triggerSubType } : { triggerSubType }) : {};
+										let triggerOptions = {};
+										if (playlistType === 'trigger') {
+											if (triggerSubType === 'time') {
+												triggerOptions = { triggerInterval, triggerStartAt: `${parseInt(triggerStartHour,10)}:${triggerStartMinute} ${triggerStartAmPm}`, triggerStopAt: `${parseInt(triggerStopHour,10)}:${triggerStopMinute} ${triggerStopAmPm}`, triggerSubType };
+											} else if (triggerSubType === 'customer') {
+												triggerOptions = { triggerSubType, customerTriggerMode, customerIds: customerIds.length ? [...customerIds] : null, customerFileName: customerFileName || null, triggerAt };
+											    } else if (triggerSubType === 'product') {
+												triggerOptions = { triggerSubType, productIds: productIds.length ? [...productIds] : null, productFileName: productFileName || null, productTriggerAt };
+											} else {
+												triggerOptions = { triggerSubType };
+											}
+										}
 
 										if (editingPlaylistId) {
 											const updatedPlaylist = {
@@ -1117,9 +1317,19 @@ function AssignContent() {
 										setAddedContent([]);
 										setPlaylistType('regular');
 										setTriggerInterval(5);
+										// Reset customer/product trigger fields
+										setCustomerTriggerMode('all');
+										setCustomerIds([]);
+										setCustomerFileName('');
+										setCustomerParseError('');
+										setTriggerAt('customer-selection');
+										setProductIds([]);
+										setProductFileName('');
+										setProductParseError('');
+										setProductTriggerAt('add-to-cart');
 										setTimeout(() => setShowAddAlert(false), 1000);
 									}}
-									disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate || (playlistType === 'trigger' && !triggerSubType) || (playlistType === 'trigger' && triggerSubType === 'time' && (!triggerInterval || Number(triggerInterval) < 5 || !computeTriggerTimeValidity().valid))}
+											disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate || (playlistType === 'trigger' && !triggerSubType) || (playlistType === 'trigger' && triggerSubType === 'time' && (triggerIntervalError || !triggerInterval || Number(triggerInterval) < 5 || !computeTriggerTimeValidity().valid)) || (playlistType === 'trigger' && triggerSubType === 'customer' && customerTriggerMode === 'specific' && (!customerIds || customerIds.length === 0)) || (playlistType === 'trigger' && triggerSubType === 'product' && (!productIds || productIds.length === 0))}
 								>
 									{editingPlaylistId ? 'Save Changes' : 'Create Playlist'}
 								</Button>
@@ -1163,6 +1373,10 @@ function AssignContent() {
 		</div>
 	);
 }
+
+// (duplicate handlers removed)
+
+// (duplicate handlers removed)
 
 function normalizeStoreId(id) {
 	if (!id) return '';

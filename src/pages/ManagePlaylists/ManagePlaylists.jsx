@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Tab, Button, Alert } from 'react-bootstrap';
 
 import { getAllContent, getDB } from '../../services/indexeddb';
@@ -31,14 +31,21 @@ function AssignContent() {
     const [searchApproved, setSearchApproved] = useState("");
     const [searchRejected, setSearchRejected] = useState("");
     const [searchInactive, setSearchInactive] = useState("");
-        // Check for expiring param in URL
-        const [expiringOnly, setExpiringOnly] = useState(false);
-        React.useEffect(() => {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('expiring') === '1') {
-                setExpiringOnly(true);
-            }
-        }, []);
+        // Check for expiring param in URL; allow passing days via expiringDays param
+            const [expiringOnly, setExpiringOnly] = useState(false);
+            const [expiringDays, setExpiringDays] = useState(5);
+            const location = useLocation();
+            React.useEffect(() => {
+                const params = new URLSearchParams(location.search);
+                if (params.get('expiring') === '1') {
+                    setExpiringOnly(true);
+                    setActiveTab('approved');
+                } else {
+                    setExpiringOnly(false);
+                }
+                const days = parseInt(params.get('expiringDays'), 10);
+                if (!isNaN(days) && days > 0) setExpiringDays(days);
+            }, [location.search]);
             // Load playlists from IndexedDB on mount
             React.useEffect(() => {
                 async function loadPlaylists() {
@@ -73,14 +80,14 @@ function AssignContent() {
         return String(id).trim().toUpperCase();
     }
 
-    // Helper: is playlist expiring in 5 days
+    // Helper: is playlist expiring in `expiringDays` days
     function isExpiring(row) {
         if (!row.endDate) return false;
         const today = new Date();
-        const fiveDaysFromNow = new Date(today);
-        fiveDaysFromNow.setDate(today.getDate() + 5);
+        const expiryFromNow = new Date(today);
+        expiryFromNow.setDate(today.getDate() + (expiringDays || 5));
         const end = new Date(row.endDate);
-        return end >= today && end <= fiveDaysFromNow;
+        return end >= today && end <= expiryFromNow;
     }
 
     function getTerritoryDisplay(row) {
@@ -205,7 +212,7 @@ function AssignContent() {
                                                    <td>
                                                                {getTerritoryLabel(row)}
                                                    </td>
-                                                <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                 <td>{row.triggerStartAt || '-'}</td>
                                                 <td>{row.triggerStopAt || '-'}</td>
                                                 <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
@@ -260,6 +267,11 @@ function AssignContent() {
                 </Tab>
                    <Tab eventKey="approved" title="Approved">
                        <div className="p-3">
+                               {expiringOnly && (
+                                   <div className="mb-3">
+                                       <Alert variant="info">Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s). <Button variant="link" className="p-0" onClick={() => { setExpiringOnly(false); navigate('/manage-playlists'); }}>Clear</Button></Alert>
+                                   </div>
+                               )}
                            <div className="mb-2">
                                <input
                                    type="text"
@@ -272,6 +284,7 @@ function AssignContent() {
                            </div>
                            {approvedRows.filter(row => {
                                const q = searchApproved.toLowerCase();
+                               if (expiringOnly) return isExpiring(row);
                                if (!q) return true;
                                                        return (
                                                            (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
@@ -304,6 +317,11 @@ function AssignContent() {
                                            {approvedRows
                                                .filter(row => !row.inactive)
                                                .filter(row => {
+                                                   // If expiringOnly, only show playlists expiring in configured days
+                                                   if (expiringOnly) return isExpiring(row);
+                                                   return true;
+                                               })
+                                               .filter(row => {
                                                    const q = searchApproved.toLowerCase();
                                                    if (!q) return true;
                                                    return (
@@ -322,7 +340,7 @@ function AssignContent() {
                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
                                                    <td>{getTerritoryLabel(row)}</td>
-                                                   <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                   <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                    <td>{row.triggerStartAt || '-'}</td>
                                                    <td>{row.triggerStopAt || '-'}</td>
                                                    <td>{row.startDate || '-'}</td>
@@ -420,7 +438,7 @@ function AssignContent() {
                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
                                                    <td>{getTerritoryLabel(row)}</td>
-                                                   <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                   <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                    <td>{row.triggerStartAt || '-'}</td>
                                                    <td>{row.triggerStopAt || '-'}</td>
                                                    <td>{row.startDate || '-'}</td>
@@ -514,7 +532,7 @@ function AssignContent() {
                                                            <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                        </td>
                                                        <td>{getTerritoryDisplay(row)}</td>
-                                                                         <td>{row.type ? (row.type === 'trigger' ? `Trigger${row.triggerInterval ? ` (${row.triggerInterval} min)` : ''}` : 'Regular') : 'Regular'}</td>
+                                                                         <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                                      <td>{row.triggerStartAt || '-'}</td>
                                                                      <td>{row.triggerStopAt || '-'}</td>
                                                                      <td>{row.selectedState || '-'}</td>

@@ -1,4 +1,7 @@
 import { addAction } from './activityLog';
+import { addDevice as addDeviceDB, getAllDevices as getAllDevicesDB, deleteDeviceById as deleteDeviceByIdDB, updateDevice as updateDeviceDB } from './deviceIndexeddb';
+import { addAssignment as addAssignmentDB, getAllAssignments as getAllAssignmentsDB, deleteAssignment as deleteAssignmentDB } from './deviceIndexeddb';
+import { addContent, getAllContent, addPlaylist, getAllPlaylists } from './indexeddb';
 
 class MockBackend {
   constructor() {
@@ -6,62 +9,73 @@ class MockBackend {
   }
 
   init() {
-    if (!localStorage.getItem('devices')) {
-      localStorage.setItem('devices', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('assignments')) {
-      // Seed with demo assignments for dashboard testing
-      localStorage.setItem('assignments', JSON.stringify([
-        {
-          id: 1,
-          contentId: 1,
-          locationId: 5,
-          locationName: "Store LA-01",
-          startDate: "2025-11-13",
-          endDate: "2025-11-30",
-          orientation: "horizontal"
-        },
-        {
-          id: 2,
-          contentId: 2,
-          locationId: 8,
-          locationName: "Store SF-01",
-          startDate: "2025-11-13",
-          endDate: "2025-11-29",
-          orientation: "horizontal"
-        },
-        {
-          id: 3,
-          contentId: 3,
-          locationId: 3,
-          locationName: "California (All Stores)",
-          startDate: "2025-11-15",
-          endDate: "2025-12-25",
-          orientation: "both"
-        },
-        {
-          id: 4,
-          contentId: 4,
-          locationId: 4,
-          locationName: "Store NY-01",
-          startDate: "2025-11-20",
-          endDate: "2025-11-23",
-          orientation: "vertical"
+    // If no devices in IndexedDB, ensure stores exist - seed data can be added here if needed
+    (async () => {
+      try {
+        const devices = await getAllDevicesDB();
+        if (!devices || devices.length === 0) {
+          // Seed no devices by default; can seed sample devices here if needed
         }
-      ]));
-    }
-    if (!localStorage.getItem('content')) {
-      localStorage.setItem('content', JSON.stringify([]));
-    }
-    if (!localStorage.getItem('customContent')) {
-      localStorage.setItem('customContent', JSON.stringify([]));
-    }
+        const content = await getAllContent();
+        const playlists = await getAllPlaylists();
+        const assignments = await getAllAssignmentsDB();
+
+        // Seed minimal content and playlists for dev/demo if DB is empty
+        let createdIds = [];
+        if (!content || content.length === 0) {
+          const seeded = [
+            { title: 'Welcome Slide', active: true, type: 'image', url: 'welcome.jpg' },
+            { title: 'Promo A', active: true, type: 'image', url: 'promo-a.jpg' },
+            { title: 'Promo B', active: true, type: 'image', url: 'promo-b.jpg' },
+            { title: 'Demo Video', active: true, type: 'video', url: 'demo.mp4' }
+          ];
+          // createdIds already declared above
+          for (const c of seeded) {
+            const id = await addContent(c);
+            createdIds.push(id);
+          }
+          // seed 1 playlist and assignments referencing created content
+          if (!playlists || playlists.length === 0) {
+            const playlist = { playlistName: 'Demo Playlist', status: 'approved', selectedContent: createdIds.slice(0, 3), startDate: new Date().toISOString(), endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString() };
+            await addPlaylist(playlist);
+          }
+          // After seeding content and playlist, if assignments empty then seed them using createdIds
+        }
+
+        // If assignments are empty, seed demo assignments based on available content ids
+        if (!assignments || assignments.length === 0) {
+          // If content already existed (not seeded), pick the first few IDs
+          if (!createdIds || createdIds.length === 0) {
+            createdIds = (content || []).map(c => c.id).filter(Boolean).slice(0, 3);
+          }
+          if (createdIds.length > 0) {
+            // Add assignments using created content ids mapping
+            const now = new Date();
+            // For demo: assign first 3 pieces to sample locations
+            const demoAssignments = createdIds.slice(0, 3).map((cid, idx) => {
+              const storeOptions = [
+                { storeId: 5, name: 'Store LA-01' },
+                { storeId: 8, name: 'Store SF-01' },
+                { storeId: 3, name: 'California (All Stores)' }
+              ];
+              const store = storeOptions[idx] || storeOptions[0];
+              const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+              return { assignmentId: `demo-${Date.now()}-${idx+1}`, contentId: cid, locationId: store.storeId, locationName: store.name, startDate: start.toISOString(), endDate: new Date(now.getTime() + ((idx + 1) * 10 + 4) * 24 * 60 * 60 * 1000).toISOString(), orientation: idx === 2 ? 'both' : 'horizontal' };
+            });
+            for (const a of demoAssignments) {
+              await addAssignmentDB(a);
+              // dispatch event so UI updates immediately
+              window.dispatchEvent(new CustomEvent('contentUpdate', { detail: { assignment: a } }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Mock backend DB seed error', err);
+      }
+    })();
   }
 
-  registerDevice(deviceData) {
-    const devicesStr = localStorage.getItem('devices');
-    const devices = devicesStr ? JSON.parse(devicesStr) : [];
-    
+  async registerDevice(deviceData) {
     const newDevice = {
       id: deviceData.id || Date.now().toString(),
       pairingCode: this.generatePairingCode(),
@@ -69,122 +83,64 @@ class MockBackend {
       lastHeartbeat: new Date().toISOString(),
       ...deviceData
     };
-    
-    devices.push(newDevice);
-    localStorage.setItem('devices', JSON.stringify(devices));
-    
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'devices',
-      newValue: JSON.stringify(devices)
-    }));
     try {
+      await addDeviceDB(newDevice);
+      // Dispatch storage-like event for consumers that listen to 'storage' updates
+      window.dispatchEvent(new StorageEvent('storage', { key: 'devices', newValue: JSON.stringify(await getAllDevicesDB()) }));
       addAction({ actionType: 'device.add', actor: 'system', message: 'Device registered', details: { deviceId: newDevice.id } });
-    } catch(err) {
-      console.error('activity log error', err);
+    } catch (err) {
+      console.error('Error registering device to DB', err);
     }
-    
     return newDevice;
   }
 
-  getDevice(deviceId) {
-    const devicesStr = localStorage.getItem('devices');
-    const devices = devicesStr ? JSON.parse(devicesStr) : [];
+  async getDevice(deviceId) {
+    const devices = await getAllDevicesDB();
     return devices.find(d => d.id === deviceId);
   }
 
-  getAllDevices() {
-    const devicesStr = localStorage.getItem('devices');
-    return devicesStr ? JSON.parse(devicesStr) : [];
+  async getAllDevices() {
+    return await getAllDevicesDB();
   }
 
-  deleteDevice(deviceId) {
-    const devicesStr = localStorage.getItem('devices');
-    const devices = devicesStr ? JSON.parse(devicesStr) : [];
-    
-    const filtered = devices.filter(d => d.id !== deviceId);
-    localStorage.setItem('devices', JSON.stringify(filtered));
-    
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'devices',
-      newValue: JSON.stringify(filtered)
-    }));
-    try {
-      addAction({ actionType: 'device.delete', actor: 'system', message: 'Device removed', details: { deviceId } });
-    } catch(err) {
-      console.error('activity log error', err);
-    }
+  async deleteDevice(deviceId) {
+    await deleteDeviceByIdDB(deviceId);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'devices', newValue: JSON.stringify(await getAllDevicesDB()) }));
+    try { addAction({ actionType: 'device.delete', actor: 'system', message: 'Device removed', details: { deviceId } }); } catch(err) { console.error('activity log error', err); }
   }
 
-  updateDeviceHeartbeat(deviceId) {
-    const devicesStr = localStorage.getItem('devices');
-    const devices = devicesStr ? JSON.parse(devicesStr) : [];
-    
+  async updateDeviceHeartbeat(deviceId) {
+    const devices = await getAllDevicesDB();
     const device = devices.find(d => d.id === deviceId);
     if (device) {
       device.lastHeartbeat = new Date().toISOString();
       device.status = 'online';
-      localStorage.setItem('devices', JSON.stringify(devices));
+      await updateDeviceDB(device);
     }
   }
 
-  getDeviceContent(deviceId) {
-    const assignmentsStr = localStorage.getItem('assignments');
-    const assignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-    
-    const device = this.getDevice(deviceId);
-    
+  async getDeviceContent(deviceId) {
+    const assignments = await getAllAssignmentsDB();
+    const device = await this.getDevice(deviceId);
     if (!device || !device.storeId) return [];
-    
-    return assignments.filter(a => {
-      return a.locationId === device.storeId || 
-             this.isParentLocation(a.locationId, device.storeId);
-    });
+    return assignments.filter(a => a.locationId === device.storeId || this.isParentLocation(a.locationId, device.storeId));
   }
 
-  addAssignment(assignment) {
-    const assignmentsStr = localStorage.getItem('assignments');
-    const assignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-    
-    const newAssignment = {
-      id: Date.now().toString(),
-      ...assignment
-    };
-    
-    assignments.push(newAssignment);
-    localStorage.setItem('assignments', JSON.stringify(assignments));
-    
-    window.dispatchEvent(new CustomEvent('contentUpdate', {
-      detail: { assignment: newAssignment }
-    }));
-    try {
-      addAction({ actionType: 'assignment.add', actor: 'system', message: 'Assignment created', details: { assignmentId: newAssignment.id, contentId: newAssignment.contentId } });
-    } catch(err) {
-      console.error('activity log error', err);
-    }
-    
+  async addAssignment(assignment) {
+    const newAssignment = await addAssignmentDB(assignment);
+    window.dispatchEvent(new CustomEvent('contentUpdate', { detail: { assignment: newAssignment } }));
+    try { addAction({ actionType: 'assignment.add', actor: 'system', message: 'Assignment created', details: { assignmentId: newAssignment.assignmentId, contentId: newAssignment.contentId } }); } catch (err) { console.error('activity log error', err); }
     return newAssignment;
   }
 
-  getAllAssignments() {
-    const assignmentsStr = localStorage.getItem('assignments');
-    return assignmentsStr ? JSON.parse(assignmentsStr) : [];
+  async getAllAssignments() {
+    return await getAllAssignmentsDB();
   }
 
-  deleteAssignment(assignmentId) {
-    const assignmentsStr = localStorage.getItem('assignments');
-    const assignments = assignmentsStr ? JSON.parse(assignmentsStr) : [];
-    
-    const filtered = assignments.filter(a => a.id !== assignmentId);
-    localStorage.setItem('assignments', JSON.stringify(filtered));
-    
-    window.dispatchEvent(new CustomEvent('contentUpdate', {
-      detail: { deleted: assignmentId }
-    }));
-    try {
-      addAction({ actionType: 'assignment.delete', actor: 'system', message: 'Assignment deleted', details: { assignmentId } });
-    } catch(err) {
-      console.error('activity log error', err);
-    }
+  async deleteAssignment(assignmentId) {
+    await deleteAssignmentDB(assignmentId);
+    window.dispatchEvent(new CustomEvent('contentUpdate', { detail: { deleted: assignmentId } }));
+    try { addAction({ actionType: 'assignment.delete', actor: 'system', message: 'Assignment deleted', details: { assignmentId } }); } catch(err) { console.error('activity log error', err); }
   }
 
   generatePairingCode() {

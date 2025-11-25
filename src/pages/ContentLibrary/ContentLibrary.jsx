@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert } from 'react-bootstrap';
+import Select from 'react-select';
 import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
+import { productList } from '../../data/productList';
 import { getAllDevices } from '../../services/deviceIndexeddb';
 
 function ContentLibrary() {
@@ -10,6 +12,9 @@ function ContentLibrary() {
   const [editContent, setEditContent] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [productIdInput, setProductIdInput] = useState('');
+  const [selectedProductOptions, setSelectedProductOptions] = useState([]);
+  const [productInputError, setProductInputError] = useState('');
   const [newContentName, setNewContentName] = useState('');
   const [newImages, setNewImages] = useState([]);
   const [newVideos, setNewVideos] = useState([]);
@@ -27,6 +32,9 @@ function ContentLibrary() {
   const [previewAnchor, setPreviewAnchor] = useState(null);
   const [viewContent, setViewContent] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [editProductIdInput, setEditProductIdInput] = useState('');
+  const [editSelectedProductOptions, setEditSelectedProductOptions] = useState([]);
+  const [editProductInputError, setEditProductInputError] = useState('');
 
   const handleRemoveSlide = (idx) => {
     if (!editContent || !editContent.slides) return;
@@ -110,6 +118,18 @@ function ContentLibrary() {
     setShowEditModal(true);
     setEditNewFiles([]);
     setEditError('');
+    // Initialize edit product options from content if present
+    if (content && content.products && Array.isArray(content.products)) {
+      const opts = content.products.map(pid => {
+        const found = productList.find(p => p.id === pid);
+        return { value: pid, label: `${pid}${found ? ' - ' + found.name : ''}` };
+      });
+      setEditSelectedProductOptions(opts);
+    } else {
+      setEditSelectedProductOptions([]);
+    }
+    setEditProductIdInput('');
+    setEditProductInputError('');
   };
 
   const closeEditModal = () => {
@@ -117,6 +137,9 @@ function ContentLibrary() {
     setShowEditModal(false);
     setEditNewFiles([]);
     setEditError('');
+    setEditSelectedProductOptions([]);
+    setEditProductIdInput('');
+    setEditProductInputError('');
   };
 
   // Handle adding new images/videos in edit modal
@@ -229,6 +252,14 @@ function ContentLibrary() {
     setEditMediaTypeError('');
     const all = await getAllContent();
     setContentList(all);
+    // Ensure edit product selection state stays in sync when files are saved
+    if (updated && updated.products && Array.isArray(updated.products)) {
+      const opts = updated.products.map(pid => {
+        const found = productList.find(p => p.id === pid);
+        return { value: pid, label: `${pid}${found ? ' - ' + found.name : ''}` };
+      });
+      setEditSelectedProductOptions(opts);
+    }
   };
 
   // Extract resolution for each selected image/video
@@ -309,6 +340,8 @@ function ContentLibrary() {
     setNewImages([]);
     setNewVideos([]);
     setAddError('');
+    setProductIdInput('');
+    setSelectedProductOptions([]);
   };
   const closeAddModal = () => {
     setShowAddModal(false);
@@ -316,6 +349,8 @@ function ContentLibrary() {
     setNewImages([]);
     setNewVideos([]);
     setAddError('');
+    setProductIdInput('');
+    setSelectedProductOptions([]);
   };
   const handleAddMedia = (e) => {
     const files = Array.from(e.target.files);
@@ -417,6 +452,7 @@ function ContentLibrary() {
       type: isVideo ? 'video' : isSlideshow ? 'slideshow' : 'image',
       slides: slidesFiltered,
       ...(duration ? { duration } : {})
+      , products: (selectedProductOptions.length > 0 ? selectedProductOptions.map(p => p.value) : [])
     };
     await addContent(newContent);
     const all = await getAllContent();
@@ -427,6 +463,23 @@ function ContentLibrary() {
     setNewVideos([]);
     setAddError('');
     setMediaTypeError('');
+    setSelectedProductOptions([]);
+    setProductIdInput('');
+  };
+
+  const handleEditProductsChange = async (opts) => {
+    const selected = opts || [];
+    setEditSelectedProductOptions(selected);
+    if (!editContent) return;
+    const updated = { ...editContent, products: selected.map(o => o.value) };
+    try {
+      await updateContent(updated);
+      setEditContent(updated);
+      const all = await getAllContent();
+      setContentList(all);
+    } catch (err) {
+      console.error('Error saving edited products', err);
+    }
   };
 
   return (
@@ -452,11 +505,12 @@ function ContentLibrary() {
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                        <th>Record ID</th>
-                        <th>Content Name</th>
-                        <th>Number of Images</th>
-                        <th>Action</th>
-                      </tr>
+                          <th>Record ID</th>
+                          <th>Content Name</th>
+                          <th>Number of Images</th>
+                          <th>Products</th>
+                          <th>Action</th>
+                        </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
@@ -473,6 +527,7 @@ function ContentLibrary() {
                           </td>
                           <td>{content.title}</td>
                           <td>{content.slides ? content.slides.length : 1}</td>
+                          <td>{Array.isArray(content.products) ? content.products.length : 0}</td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                               <Form.Check
@@ -515,10 +570,11 @@ function ContentLibrary() {
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                        <th>Record ID</th>
-                        <th>Content Name</th>
-                        <th>Number of Images</th>
-                      </tr>
+                          <th>Record ID</th>
+                          <th>Content Name</th>
+                          <th>Number of Images</th>
+                          <th>Products</th>
+                        </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
@@ -528,6 +584,7 @@ function ContentLibrary() {
                           <td>{content.id}</td>
                           <td>{content.title}</td>
                           <td>{content.slides ? content.slides.length : 1}</td>
+                          <td>{Array.isArray(content.products) ? content.products.length : 0}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -628,6 +685,90 @@ function ContentLibrary() {
                   )}
                   <button className="btn btn-primary mt-2" onClick={handleEditSaveFiles} disabled={editNewFiles.length === 0 || !!editMediaTypeError}>Add to Content</button>
                 </div>
+                {/* Product association for edit modal */}
+                <div className="mb-3">
+                  <Form.Group>
+                    <Form.Label>Associate Products</Form.Label>
+                    <div>
+                      <div>
+                        <Select
+                          isMulti
+                          options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                          value={editSelectedProductOptions}
+                          onChange={handleEditProductsChange}
+                          placeholder="Select products..."
+                          classNamePrefix="react-select"
+                        />
+                      </div>
+                      <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}>or</div>
+                      <div style={{ minWidth: 320 }}>
+                        <Form.Control
+                          type="text"
+                          placeholder="Enter product ID(s) and press Enter (e.g., AVEL0093, ARTH0131)"
+                          value={editProductIdInput}
+                          onChange={e => {
+                            setEditProductInputError('');
+                            setEditProductIdInput(e.target.value);
+                          }}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const raw = editProductIdInput.trim();
+                              if (!raw) return;
+                              const parts = raw.split(/\s*,\s*/).map(p => p.trim()).filter(Boolean).map(p => p.toUpperCase());
+                              if (parts.length === 0) return;
+                              const notFound = [];
+                              const toAdd = [];
+                              for (const id of parts) {
+                                const found = productList.find(p => p.id.toUpperCase() === id);
+                                if (found) {
+                                  const opt = { value: found.id, label: `${found.id} - ${found.name}` };
+                                  toAdd.push(opt);
+                                } else {
+                                  notFound.push(id);
+                                }
+                              }
+                              // Merge into editSelectedProductOptions and persist
+                              setEditSelectedProductOptions(prev => {
+                                const existing = new Set(prev.map(p => p.value));
+                                const merged = [...prev];
+                                for (const opt of toAdd) {
+                                  if (!existing.has(opt.value)) {
+                                    merged.push(opt);
+                                    existing.add(opt.value);
+                                  }
+                                }
+                                // Persist updated products
+                                (async () => {
+                                  if (editContent) {
+                                    const updated = { ...editContent, products: merged.map(o => o.value) };
+                                    try {
+                                      await updateContent(updated);
+                                      setEditContent(updated);
+                                      const all = await getAllContent();
+                                      setContentList(all);
+                                    } catch (err) {
+                                      console.error('Error saving updated products', err);
+                                    }
+                                  }
+                                })();
+                                return merged;
+                              });
+                              if (notFound.length > 0) {
+                                setEditProductInputError(`Product(s) not found: ${notFound.join(', ')}`);
+                              } else {
+                                setEditProductInputError('');
+                              }
+                              setEditProductIdInput('');
+                            }
+                          }}
+                        />
+                        {editProductInputError && <div className="text-danger mt-2">{editProductInputError}</div>}
+                      </div>
+                    </div>
+                    <Form.Text className="text-muted">Use the product ID input (supports comma-separated IDs) to quickly add products to the multi-select for this content.</Form.Text>
+                  </Form.Group>
+                </div>
               </>
             )}
           </Modal.Body>
@@ -643,6 +784,7 @@ function ContentLibrary() {
           </Modal.Header>
           <Modal.Body>
             {viewContent && (
+              <>
               <div className="d-flex flex-wrap gap-3 mb-3">
                 {(viewContent.slides || [viewContent.fileUrl]).map((media, idx) => (
                   <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, position: 'relative' }}>
@@ -660,6 +802,33 @@ function ContentLibrary() {
                   </div>
                 ))}
               </div>
+              <div className="mb-3">
+                <strong>Associated Products</strong>
+                {Array.isArray(viewContent.products) && viewContent.products.length > 0 ? (
+                  <Table bordered size="sm" className="mt-2">
+                    <thead>
+                      <tr>
+                        <th>Product ID</th>
+                        <th>Product Name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewContent.products.map((pid, i) => {
+                        const found = productList.find(p => p.id === pid || p.id === (pid || '').toString());
+                        return (
+                          <tr key={i}>
+                            <td>{pid}</td>
+                            <td>{found ? found.name : 'Unknown product'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                ) : (
+                  <div className="text-muted mt-2">No products associated with this content.</div>
+                )}
+              </div>
+            </>
             )}
           </Modal.Body>
           <Modal.Footer>
@@ -695,6 +864,74 @@ function ContentLibrary() {
                   You can select multiple images or multiple videos, but not both at the same time.
                 </Form.Text>
                 {mediaTypeError && <div className="text-danger mt-1">{mediaTypeError}</div>}
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Associate Products</Form.Label>
+                <div>
+                  <div>
+                    <Select
+                      isMulti
+                      options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                      value={selectedProductOptions}
+                      onChange={opts => setSelectedProductOptions(opts || [])}
+                      placeholder="Select products..."
+                      classNamePrefix="react-select"
+                    />
+                  </div>
+                  <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}>or</div>
+                  <div style={{ minWidth: 320 }}>
+                    <Form.Control
+                      type="text"
+                      placeholder="Enter product ID(s) and press Enter (e.g., AVEL0093 or AVEL0093, ARTH0131)"
+                      value={productIdInput}
+                      onChange={e => {
+                        setProductInputError('');
+                        setProductIdInput(e.target.value);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const raw = productIdInput.trim();
+                          if (!raw) return;
+                          // Split comma-separated ids, allow spaces
+                          const parts = raw.split(/\s*,\s*/).map(p => p.trim()).filter(Boolean).map(p => p.toUpperCase());
+                          if (parts.length === 0) return;
+                          const notFound = [];
+                          const toAdd = [];
+                          for (const id of parts) {
+                            const found = productList.find(p => p.id.toUpperCase() === id);
+                            if (found) {
+                              const opt = { value: found.id, label: `${found.id} - ${found.name}` };
+                              toAdd.push(opt);
+                            } else {
+                              notFound.push(id);
+                            }
+                          }
+                          // Add only unique options
+                          setSelectedProductOptions(prev => {
+                            const existing = new Set(prev.map(p => p.value));
+                            const merged = [...prev];
+                            for (const opt of toAdd) {
+                              if (!existing.has(opt.value)) {
+                                merged.push(opt);
+                                existing.add(opt.value);
+                              }
+                            }
+                            return merged;
+                          });
+                          if (notFound.length > 0) {
+                            setProductInputError(`Product(s) not found: ${notFound.join(', ')}`);
+                          } else {
+                            setProductInputError('');
+                          }
+                          setProductIdInput('');
+                        }
+                      }}
+                    />
+                    {productInputError && <div className="text-danger mt-2">{productInputError}</div>}
+                  </div>
+                </div>
+                <Form.Text className="text-muted">Use the product ID input (supports comma-separated IDs) to quickly add products to the multi-select.</Form.Text>
               </Form.Group>
               {mediaResolutions.length > 0 && (
                 <div className="mb-3">

@@ -2,6 +2,7 @@ import { getAllAssignments, addAssignment, deleteAssignment, bulkAddAssignments 
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
 import React, { useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Row, Col, Button, Form, InputGroup, Modal, Badge, Alert, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 import * as XLSX from 'xlsx';
@@ -11,6 +12,7 @@ import { storeList } from '../../data/storeList';
 import { getAllDevices, addDevice, updateDevice, deleteDeviceById } from '../../services/deviceIndexeddb';
 
 function DeviceManagement() {
+  const location = useLocation();
       // Load assignments from IndexedDB on mount
       React.useEffect(() => {
         async function loadAssignmentsFromDB() {
@@ -62,10 +64,12 @@ function DeviceManagement() {
   const [devicesForSelectedStore, setDevicesForSelectedStore] = React.useState([]);
   const [deviceToAssign, setDeviceToAssign] = React.useState(null);
   const [macAddressToAssign, setMacAddressToAssign] = React.useState('');
+  const [posMacToAssign, setPosMacToAssign] = React.useState('');
   const [orientationToAssign, setOrientationToAssign] = React.useState('');
 
   // MAC address validation helper (must be after macAddressToAssign is declared)
   const isValidMac = macAddressToAssign && /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddressToAssign);
+  const isValidPosMac = !posMacToAssign || /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(posMacToAssign);
   const [storeDeviceMap, setStoreDeviceMap] = React.useState([]);
   const [assignments, setAssignments] = React.useState([]); // NEW STATE for assignments
   const [activeSubTab, setActiveSubTab] = React.useState('assign');
@@ -108,7 +112,7 @@ function DeviceManagement() {
           id: storeId,
           name: storeDetails ? storeDetails.name : assignment.storeName || 'Unknown Store',
           area: storeDetails ? storeDetails.area : assignment.area || '',
-          state: storeDetails ? storeDetails.state : assignment.state || '',
+          state: storeDetails ? (storeDetails.state && String(storeDetails.state).trim()) : (assignment.state && String(assignment.state).trim()) || '',
           deviceCount: 0,
           devices: [] // This will hold device instances with assignment info
         };
@@ -120,6 +124,7 @@ function DeviceManagement() {
           ...deviceModel, 
           assignmentId: assignment.assignmentId,
           macAddress: assignment.macAddress,
+          posMacAddress: assignment.posMacAddress || deviceModel.posMacAddress || '',
           orientation: assignment.orientation || deviceModel.orientation,
           active: assignment.active !== false // Default to true
         });
@@ -133,6 +138,23 @@ function DeviceManagement() {
   const [listViewStoreNameFilter, setListViewStoreNameFilter] = React.useState('');
   const [listViewCityFilter, setListViewCityFilter] = React.useState('');
   const [listViewStateFilter, setListViewStateFilter] = React.useState('');
+
+  // Read query params and set the initial sub tab and filter
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    const stateParam = params.get('state');
+    if (tab === 'listView') {
+      setActiveSubTab('listView');
+      setActiveTab('assign');
+    }
+    if (stateParam) {
+      setListViewStateFilter(decodeURIComponent(stateParam));
+      // When filtering by state we want the List View open
+      setActiveSubTab('listView');
+      setActiveTab('assign');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (selectedStoreForAssignment) {
@@ -342,12 +364,20 @@ function DeviceManagement() {
       alert('Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E)');
       return;
     }
+    if (posMacToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(posMacToAssign)) {
+      alert('Please enter a valid POS MAC address (or leave empty).');
+      return;
+    }
 
+    const findStore = storeList.find(s => s.id === selectedStoreForAssignment.value);
     const newAssignment = {
       assignmentId: `${Date.now()}-new`,
       deviceId: deviceToAssign,
       storeId: selectedStoreForAssignment.value,
+      state: findStore && findStore.state ? findStore.state : undefined,
+      locationName: findStore && findStore.name ? findStore.name : undefined,
       macAddress: macAddressToAssign,
+      posMacAddress: posMacToAssign || '',
       orientation: orientationToAssign,
       active: true,
     };
@@ -357,6 +387,7 @@ function DeviceManagement() {
     // Reset form
     setDeviceToAssign(null);
     setMacAddressToAssign('');
+    setPosMacToAssign('');
     setOrientationToAssign('');
   };
 
@@ -387,6 +418,7 @@ function DeviceManagement() {
             'Device': device.name,
             'DeviceID': device.id,
             'MAC Address': device.macAddress,
+            'POS MAC': device.posMacAddress || '',
             'Status': device.active ? 'Active' : 'Inactive',
             'Orientation': device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A'),
           });
@@ -398,6 +430,10 @@ function DeviceManagement() {
     const headers = [
       'Store ID', 'Store Name', 'City', 'State', 'Device', 'DeviceID', 'MAC Address', 'Status', 'Orientation'
     ];
+    // Add POS MAC to headers if there is at least one device with posMac
+    if (dataToExport.some(d => d['POS MAC'])) {
+      headers.splice(7, 0, 'POS MAC');
+    }
     const worksheet = XLSX.utils.json_to_sheet([]);
     XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A1' });
     XLSX.utils.sheet_add_json(worksheet, dataToExport, { origin: 'A2', skipHeader: true });
@@ -494,6 +530,7 @@ function DeviceManagement() {
       deviceId: d.id,
       storeId: selectedStoreForAssignment.value,
       macAddress: d.macAddress,
+      posMacAddress: d.posMacAddress || '',
       orientation: d.orientation,
       active: d.active,
     }));
@@ -564,6 +601,7 @@ function DeviceManagement() {
                         setSelectedStoreForAssignment(selected);
                         setDeviceToAssign(null);
                         setMacAddressToAssign('');
+                        setPosMacToAssign('');
                         setOrientationToAssign('');
                       }}
                     />
@@ -623,6 +661,27 @@ function DeviceManagement() {
                                 </Form.Control.Feedback>
                               </Form.Group>
                             </Col>
+                            <Col md={3}>
+                              <Form.Group>
+                                <Form.Label>POS MAC Address <small className="text-muted">(optional)</small></Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="00:00:00:00:00:00"
+                                  value={posMacToAssign}
+                                  maxLength={17}
+                                  onChange={e => {
+                                    let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                    value = value.slice(0, 12);
+                                    value = value.match(/.{1,2}/g)?.join(':') || '';
+                                    setPosMacToAssign(value);
+                                  }}
+                                  isInvalid={!!posMacToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(posMacToAssign)}
+                                />
+                                <Form.Control.Feedback type="invalid">
+                                  Please enter a valid POS MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                                </Form.Control.Feedback>
+                              </Form.Group>
+                            </Col>
                             {deviceToAssign && (() => {
                                 const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
                                 if (!selectedDeviceForAssignment) return null;
@@ -630,34 +689,33 @@ function DeviceManagement() {
                                     <Col md={3}>
                                         <Form.Group>
                                         <Form.Label>Orientation</Form.Label>
-                                        {selectedDeviceForAssignment.orientation === 'both' ? (
-                                            <div>
-                                              <Form.Check
-                                                inline
-                                                type="radio"
-                                                id="orientation-horizontal-radio"
-                                                label={<label htmlFor="orientation-horizontal-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
-                                                name="orientation"
-                                                value="horizontal"
-                                                checked={orientationToAssign === 'horizontal'}
-                                                onChange={e => setOrientationToAssign(e.target.value)}
-                                              />
-                                              <Form.Check
-                                                inline
-                                                type="radio"
-                                                id="orientation-vertical-radio"
-                                                label={<label htmlFor="orientation-vertical-radio" style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
-                                                name="orientation"
-                                                value="vertical"
-                                                checked={orientationToAssign === 'vertical'}
-                                                onChange={e => setOrientationToAssign(e.target.value)}
-                                              />
-                                            </div>
-                                        ) : (
-                                            <p className="form-control-static" style={{ paddingTop: '7px' }}>
-                                            {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'}
-                                            </p>
-                                        )}
+                                        <div>
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
+                                            label={<label htmlFor={`orientation-horizontal-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Landscape</label>}
+                                            name={`orientation-${selectedDeviceForAssignment.id}`}
+                                            value="horizontal"
+                                            checked={orientationToAssign === 'horizontal'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                            disabled={selectedDeviceForAssignment.orientation !== 'both'}
+                                          />
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
+                                            label={<label htmlFor={`orientation-vertical-${selectedDeviceForAssignment.id}`} style={{ cursor: 'pointer', marginBottom: 0 }}>Portrait</label>}
+                                            name={`orientation-${selectedDeviceForAssignment.id}`}
+                                            value="vertical"
+                                            checked={orientationToAssign === 'vertical'}
+                                            onChange={e => setOrientationToAssign(e.target.value)}
+                                            disabled={selectedDeviceForAssignment.orientation !== 'both'}
+                                          />
+                                          {selectedDeviceForAssignment.orientation !== 'both' && (
+                                            <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                          )}
+                                        </div>
                                         </Form.Group>
                                     </Col>
                                 );
@@ -666,7 +724,7 @@ function DeviceManagement() {
                                 <Button 
                                   variant="primary" 
                                   onClick={handleAssignNewDevice}
-                                  disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign || !isValidMac}
+                                  disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign || !isValidMac || !isValidPosMac}
                                 >
                                   Assign Device
                                 </Button>
@@ -688,6 +746,7 @@ function DeviceManagement() {
                               <th>Device Name</th>
                               <th>Device ID</th>
                               <th>MAC Address</th>
+                              <th>POS MAC</th>
                               <th>Orientation</th>
                               <th>Status</th>
                               <th>Actions</th>
@@ -699,7 +758,36 @@ function DeviceManagement() {
                                 <td>{device.name}</td>
                                 <td>{device.id}</td>
                                 <td>{device.macAddress}</td>
-                                <td>{device.orientation === 'both' ? 'Both' : device.orientation === 'horizontal' ? 'Landscape' : device.orientation === 'vertical' ? 'Portrait' : (device.orientation || 'N/A')}</td>
+                                <td>{device.posMacAddress || <span className="text-muted">-</span>}</td>
+                                <td>
+                                  <div className="d-flex gap-2 align-items-center">
+                                    <Form.Check
+                                      inline
+                                      type="radio"
+                                      id={`assign-orientation-horizontal-${device.assignmentId}`}
+                                      name={`assign-orientation-${device.assignmentId}`}
+                                      value="horizontal"
+                                      label="Landscape"
+                                      checked={device.orientation === 'horizontal'}
+                                      disabled={!(assignTabEditMode && device.orientation === 'both')}
+                                      onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'horizontal' } : d))}
+                                    />
+                                    <Form.Check
+                                      inline
+                                      type="radio"
+                                      id={`assign-orientation-vertical-${device.assignmentId}`}
+                                      name={`assign-orientation-${device.assignmentId}`}
+                                      value="vertical"
+                                      label="Portrait"
+                                      checked={device.orientation === 'vertical'}
+                                      disabled={!(assignTabEditMode && device.orientation === 'both')}
+                                      onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'vertical' } : d))}
+                                    />
+                                    {device.orientation !== 'both' && (
+                                      <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                    )}
+                                  </div>
+                                </td>
                                 <td>
                                   <Badge bg={device.active ? 'success' : 'danger'}>
                                     {device.active ? 'Active' : 'Inactive'}
@@ -771,6 +859,27 @@ function DeviceManagement() {
                                 </Form.Control.Feedback>
                               </Form.Group>
                         </Col>
+                        <Col md={3}>
+                          <Form.Group>
+                            <Form.Label>POS MAC Address <small className="text-muted">(optional)</small></Form.Label>
+                            <Form.Control
+                              type="text"
+                              placeholder="00:00:00:00:00:00"
+                              value={posMacToAssign}
+                              maxLength={17}
+                              onChange={e => {
+                                let value = e.target.value.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+                                value = value.slice(0, 12);
+                                value = value.match(/.{1,2}/g)?.join(':') || '';
+                                setPosMacToAssign(value);
+                              }}
+                              isInvalid={!!posMacToAssign && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(posMacToAssign)}
+                            />
+                            <Form.Control.Feedback type="invalid">
+                              Please enter a valid POS MAC address (e.g., 00:1A:2B:3C:4D:5E)
+                            </Form.Control.Feedback>
+                          </Form.Group>
+                        </Col>
                         {deviceToAssign && (() => {
                             const selectedDeviceForAssignment = devices.find(d => d.id === deviceToAssign);
                             if (!selectedDeviceForAssignment) return null;
@@ -778,32 +887,33 @@ function DeviceManagement() {
                                 <Col md={3}>
                                     <Form.Group>
                                     <Form.Label>Orientation</Form.Label>
-                                    {selectedDeviceForAssignment.orientation === 'both' ? (
-                                        <div>
-                                        <Form.Check
-                                            inline
-                                            type="radio"
-                                            label="Landscape"
-                                            name="orientation"
-                                            value="horizontal"
-                                            checked={orientationToAssign === 'horizontal'}
-                                            onChange={e => setOrientationToAssign(e.target.value)}
-                                        />
-                                        <Form.Check
-                                            inline
-                                            type="radio"
-                                            label="Portrait"
-                                            name="orientation"
-                                            value="vertical"
-                                            checked={orientationToAssign === 'vertical'}
-                                            onChange={e => setOrientationToAssign(e.target.value)}
-                                        />
-                                        </div>
-                                    ) : (
-                                        <p className="form-control-static" style={{ paddingTop: '7px' }}>
-                                        {selectedDeviceForAssignment.orientation === 'horizontal' ? 'Landscape' : 'Portrait'} <Badge bg="info">Auto</Badge>
-                                        </p>
-                                    )}
+                                    <div>
+                                      <Form.Check
+                                        inline
+                                        type="radio"
+                                        id={`orientation-horizontal-${selectedDeviceForAssignment.id}`}
+                                        label="Landscape"
+                                        name={`orientation-${selectedDeviceForAssignment.id}`}
+                                        value="horizontal"
+                                        checked={orientationToAssign === 'horizontal'}
+                                        onChange={e => setOrientationToAssign(e.target.value)}
+                                        disabled={selectedDeviceForAssignment.orientation !== 'both'}
+                                      />
+                                      <Form.Check
+                                        inline
+                                        type="radio"
+                                        id={`orientation-vertical-${selectedDeviceForAssignment.id}`}
+                                        label="Portrait"
+                                        name={`orientation-${selectedDeviceForAssignment.id}`}
+                                        value="vertical"
+                                        checked={orientationToAssign === 'vertical'}
+                                        onChange={e => setOrientationToAssign(e.target.value)}
+                                        disabled={selectedDeviceForAssignment.orientation !== 'both'}
+                                      />
+                                      {selectedDeviceForAssignment.orientation !== 'both' && (
+                                      <Form.Text className="text-muted ms-2 small"></Form.Text>
+                                      )}
+                                    </div>
                                     </Form.Group>
                                 </Col>
                             );
@@ -812,7 +922,7 @@ function DeviceManagement() {
                             <Button 
                                 variant="primary" 
                                 onClick={handleAssignNewDevice}
-                                disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign}
+                                disabled={!deviceToAssign || !macAddressToAssign || !orientationToAssign || !isValidMac || !isValidPosMac}
                                 >
                                 Assign Device
                             </Button>

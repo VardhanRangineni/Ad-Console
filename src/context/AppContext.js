@@ -13,15 +13,15 @@ export const AppProvider = ({ children }) => {
   const [bulkAssignContent, setBulkAssignContent] = useState([]);
 
   // Load devices from backend
-  const loadDevices = useCallback(() => {
-    const deviceList = mockBackend.getAllDevices();
-    setDevices(deviceList);
+  const loadDevices = useCallback(async () => {
+    const deviceList = await mockBackend.getAllDevices();
+    setDevices(deviceList || []);
   }, []);
 
   // Load assignments from backend
-  const loadAssignments = useCallback(() => {
-    const assignmentList = mockBackend.getAllAssignments();
-    setAssignments(assignmentList);
+  const loadAssignments = useCallback(async () => {
+    const assignmentList = await mockBackend.getAllAssignments();
+    setAssignments(assignmentList || []);
   }, []);
 
   // Handle content update events
@@ -39,8 +39,7 @@ export const AppProvider = ({ children }) => {
   // Initialize on mount
   useEffect(() => {
     // Load initial data
-    loadDevices();
-    loadAssignments();
+    (async () => { await loadDevices(); await loadAssignments(); })();
 
     // Subscribe to WebSocket events for real-time updates
     mockWebSocket.subscribe('contentUpdate', handleContentUpdate);
@@ -53,28 +52,28 @@ export const AppProvider = ({ children }) => {
   }, [handleContentUpdate, handleDeviceUpdate, loadDevices, loadAssignments]);
 
   // Register a new device
-  const registerDevice = useCallback((deviceData) => {
-    const device = mockBackend.registerDevice(deviceData);
-    loadDevices();
+  const registerDevice = useCallback(async (deviceData) => {
+    const device = await mockBackend.registerDevice(deviceData);
+    await loadDevices();
     return device;
   }, [loadDevices]);
 
   // Add a new content assignment
-  const addAssignment = useCallback((assignment) => {
-    mockBackend.addAssignment(assignment);
-    loadAssignments();
+  const addAssignment = useCallback(async (assignment) => {
+    await mockBackend.addAssignment(assignment);
+    await loadAssignments();
   }, [loadAssignments]);
 
   // Delete an assignment
-  const deleteAssignment = useCallback((id) => {
-    mockBackend.deleteAssignment(id);
-    loadAssignments();
+  const deleteAssignment = useCallback(async (id) => {
+    await mockBackend.deleteAssignment(id);
+    await loadAssignments();
   }, [loadAssignments]);
 
   // Delete a device
-  const deleteDevice = useCallback((id) => {
-    mockBackend.deleteDevice(id);
-    loadDevices();
+  const deleteDevice = useCallback(async (id) => {
+    await mockBackend.deleteDevice(id);
+    await loadDevices();
   }, [loadDevices]);
 
   // Context value object
