@@ -555,10 +555,10 @@ function DeviceManagement() {
   return (
     <div className="device-management">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
+        <h4>
           <i className="bi bi-hdd-network me-2"></i>
-          Device Management
-        </h2>
+          Store Device Mapping
+        </h4>
       </div>
 
       {/* SUB-TABS SECTION (Assign/List View) */}
@@ -589,7 +589,7 @@ function DeviceManagement() {
             <Row>
                 <Col md={7} style={{ width: '60%' }} className="d-flex align-items-end">
                   <Form.Group className="mb-3 flex-grow-1 me-2">
-                    <Form.Label>Search for a store by ID or name</Form.Label>
+                    <Form.Label>Search for a Store by Id or Name</Form.Label>
                     <AsyncSelect
                       cacheOptions
                       defaultOptions={storeOptions.slice(0, 30)}
@@ -606,16 +606,6 @@ function DeviceManagement() {
                       }}
                     />
                   </Form.Group>
-                  {selectedStoreForAssignment && devicesForSelectedStore.length > 0 && (
-                    <Button
-                      variant="primary"
-                      className="mb-3"
-                      onClick={() => setShowInlineAssignForm(v => !v)}
-                    >
-                      <i className="bi bi-plus-circle me-2"></i>
-                      {showInlineAssignForm ? 'Hide Assign Form' : 'Assign Device'}
-                    </Button>
-                  )}
                 </Col>
               </Row>
 
@@ -626,16 +616,16 @@ function DeviceManagement() {
                       {showInlineAssignForm && (
                         <>
                                <br></br>
-                          <h5>Assign a New Device to {selectedStoreForAssignment.label}</h5>
+                          <h5>Assign Device</h5>
                           <Row className="align-items-end mb-4">
                             <Col md={4}>
                               <Form.Group>
-                                <Form.Label>Select Device Model</Form.Label>
+                                <Form.Label>Select Device Type</Form.Label>
                                 <Form.Select
                                   value={deviceToAssign || ''}
                                   onChange={e => setDeviceToAssign(e.target.value)}
                                 >
-                                  <option value="">-- Select Device --</option>
+                                  <option value="">-- Select Device Type --</option>
                                   {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                 </Form.Select>
                               </Form.Group>
@@ -730,21 +720,15 @@ function DeviceManagement() {
                                 </Button>
                             </Col>
                           </Row>
-                          <div className="d-flex justify-content-end mt-3">
-                            <Button variant="primary" onClick={handleAssignTabSaveChanges}>
-                              <i className="bi bi-save me-2"></i>
-                              Save Changes
-                            </Button>
-                          </div>
                         </>
                       )}
-                      <h5>Assigned Devices for {selectedStoreForAssignment.label}</h5>
+                      <h5>Assigned Devices</h5>
                       <div className="table-responsive mb-4">
                         <table className="table table-bordered align-middle">
                           <thead className="table-light">
                             <tr>
-                              <th>Device Name</th>
-                              <th>Device ID</th>
+                              <th>Device Type</th>
+                              <th>Device Type ID</th>
                               <th>MAC Address</th>
                               <th>POS MAC</th>
                               <th>Orientation</th>
@@ -820,6 +804,12 @@ function DeviceManagement() {
                             ))}
                           </tbody>
                         </table>
+                        <div className="d-flex justify-content-end mt-3">
+                            <Button variant="primary" onClick={handleAssignTabSaveChanges}>
+                              <i className="bi bi-save me-2"></i>
+                              Save Changes
+                            </Button>
+                          </div>
                       </div>
                     </div>
                   ) : (
@@ -828,7 +818,7 @@ function DeviceManagement() {
                       <Row className="align-items-end">
                         <Col md={4}>
                           <Form.Group>
-                            <Form.Label>Select Device Model</Form.Label>
+                            <Form.Label>Select Device Type</Form.Label>
                             <Form.Select
                               value={deviceToAssign || ''}
                               onChange={e => setDeviceToAssign(e.target.value)}
@@ -1050,9 +1040,9 @@ function DeviceManagement() {
         </Modal.Header>
         <Modal.Body>
           <Form>
-            {/* Device Name */}
+            {/* Device Type */}
             <Form.Group className="mb-3">
-              <Form.Label>Device Name *</Form.Label>
+              <Form.Label>Device Type *</Form.Label>
               <Form.Control
                 type="text"
                 placeholder="e.g., Samsung 4k display"
@@ -1234,9 +1224,9 @@ function DeviceManagement() {
           </Alert>
 
           <Form>
-            {/* Device Name */}
+            {/* Device Type */}
             <Form.Group className="mb-3">
-              <Form.Label>Device Name *</Form.Label>
+              <Form.Label>Device Type *</Form.Label>
               <Form.Control
                 type="text"
                 value={configName}

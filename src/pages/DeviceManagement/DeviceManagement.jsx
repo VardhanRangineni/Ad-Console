@@ -77,6 +77,34 @@ function DeviceManagement() {
   // Context and device lists must come first
   const [devices, setDevices] = React.useState([]);
 
+  function formatDateShort(dt) {
+    if (!dt) return '-';
+    const d = new Date(dt);
+    // Format dd-MMM-yy, hh:mm
+    const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const day = pad(d.getDate());
+    const mon = months[d.getMonth()];
+    const year = String(d.getFullYear()).slice(-2);
+    const hours = pad(d.getHours());
+    const mins = pad(d.getMinutes());
+    return `${day}-${mon}-${year}, ${hours}:${mins}`;
+  }
+
+  function generateCreatorId(device, idx) {
+    // Deterministic mock creator id in format OTGxxxxxA
+    // Use last 5 alphanumeric chars of device.id or pad with digits
+    let base = String(device?.id || `DEV${idx}`).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    // last 5 chars
+    let suffix = base.slice(-5);
+    if (suffix.length < 5) suffix = suffix.padStart(5, '0');
+    // Add trailing letter based on checksum
+    let sum = 0;
+    for (let i=0;i<base.length;i++) sum += base.charCodeAt(i);
+    const letter = String.fromCharCode(65 + (sum % 26));
+    return `OTG${suffix}${letter}`;
+  }
+
   // Load devices from IndexedDB on mount
     useEffect(() => {
       async function loadDevicesFromDB() {
@@ -135,15 +163,19 @@ function DeviceManagement() {
   const [showConfigModal, setShowConfigModal] = React.useState(false);
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
   const [newDeviceName, setNewDeviceName] = React.useState('');
+  const [newDeviceNameError, setNewDeviceNameError] = React.useState('');
   const [newDeviceOrientation, setNewDeviceOrientation] = React.useState('both');
   const [newDeviceResolutionWidth, setNewDeviceResolutionWidth] = React.useState('1920');
   const [newDeviceResolutionHeight, setNewDeviceResolutionHeight] = React.useState('1080');
+  const [newDeviceResolutionError, setNewDeviceResolutionError] = React.useState('');
   const [isClone, setIsClone] = React.useState(false);
   const [configDevice, setConfigDevice] = React.useState(null);
   const [configName, setConfigName] = React.useState('');
+  const [configNameError, setConfigNameError] = React.useState('');
   const [configOrientation, setConfigOrientation] = React.useState('both');
   const [configResolutionWidth, setConfigResolutionWidth] = React.useState('1920');
   const [configResolutionHeight, setConfigResolutionHeight] = React.useState('1080');
+  const [configResolutionError, setConfigResolutionError] = React.useState('');
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
   // Modal for disable warning and confirmation
   const [showDisableWarning, setShowDisableWarning] = React.useState(false);
@@ -211,11 +243,69 @@ function DeviceManagement() {
       }
     }
   };
+  // Re-validate new device resolution when orientation changes
+  React.useEffect(() => {
+    if (newDeviceOrientation) {
+      setNewDeviceResolutionError(validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight));
+    }
+  }, [newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight]);
+
+  // Clear add modal errors when modal closes
+  React.useEffect(() => {
+    if (!showAddModal) {
+      setNewDeviceNameError('');
+      setNewDeviceResolutionError('');
+    }
+  }, [showAddModal]);
+
+  function isDuplicateActiveDeviceName(name, excludeId = null) {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    return (devices || []).some(d => d && d.active && d.name && String(d.name).trim().toLowerCase() === n && (excludeId ? d.id !== excludeId : true));
+  }
+
+  async function asyncIsDuplicateActiveDeviceName(name, excludeId = null) {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    try {
+      const allDevices = await getAllDevices();
+      return (allDevices || []).some(d => d && d.active && d.name && String(d.name).trim().toLowerCase() === n && (excludeId ? d.id !== excludeId : true));
+    } catch (err) {
+      console.error('Error checking device names', err);
+      return false; // Fail open: don't block adding if DB fails
+    }
+  }
+
+  function validateResolution(orientation, widthStr, heightStr) {
+    const w = parseInt(widthStr, 10);
+    const h = parseInt(heightStr, 10);
+    if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return 'Please enter a valid resolution for the selected orientation';
+    const orient = orientation || 'both';
+    if (orient === 'horizontal' || orient === 'both') {
+      if (w <= h) return 'Please enter a valid resolution for landscape orientation';
+    }
+    if (orient === 'vertical') {
+      if (h <= w) return 'Please enter a valid resolution for portrait orientation';
+    }
+    return '';
+  }
 
   // Add Device handler
   const handleAddDevice = async () => {
-    if (!newDeviceName.trim()) {
-      alert('Please enter device name');
+    const trimmedName = newDeviceName.trim();
+    if (!trimmedName) {
+      setNewDeviceNameError('Please enter device name');
+      return;
+    }
+    // Validate resolution first
+    const resErr = validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight);
+    if (resErr) {
+      setNewDeviceResolutionError(resErr);
+      return;
+    }
+    // Re-check in DB in case local state is stale
+    if (await asyncIsDuplicateActiveDeviceName(trimmedName)) {
+      setNewDeviceNameError('Multiple active Device Types cannot exist with same name');
       return;
     }
     const newDevice = {
@@ -238,17 +328,22 @@ function DeviceManagement() {
     setNewDeviceOrientation('both');
     setNewDeviceResolutionWidth('1920');
     setNewDeviceResolutionHeight('1080');
+    setNewDeviceNameError('');
+    setNewDeviceResolutionError('');
   };
 
-  const openConfigModal = (device) => {
-    setConfigDevice(device);
-    setConfigName(device.name);
-    setConfigOrientation(device.orientation || 'both');
-    setConfigResolutionWidth(device.resolution?.width || 1920);
-    setConfigResolutionHeight(device.resolution?.height || 1080);
-    setConfigMacAddress(device.macAddress || '');
-    setShowConfigModal(true);
+  // Reset the Add Device modal form fields to default values (keep modal open)
+  const handleResetAddModal = () => {
+    setNewDeviceName('');
+    setNewDeviceOrientation('both');
+    setNewDeviceResolutionWidth('1920');
+    setNewDeviceResolutionHeight('1080');
+    setIsClone(false);
+    setNewDeviceNameError('');
+    setNewDeviceResolutionError('');
   };
+
+  // openConfigModal removed: configure action removed from the actions column. The configure modal remains but won't be opened via the table actions.
 
   const handleOrientationChange = (newOrientation) => {
     setConfigOrientation(newOrientation);
@@ -270,6 +365,18 @@ function DeviceManagement() {
       }
     }
   };
+  // Re-validate config resolution when orientation or resolution values change
+  React.useEffect(() => {
+    setConfigResolutionError(validateResolution(configOrientation, configResolutionWidth, configResolutionHeight));
+  }, [configOrientation, configResolutionWidth, configResolutionHeight]);
+
+  // Clear config modal errors when modal closes
+  React.useEffect(() => {
+    if (!showConfigModal) {
+      setConfigNameError('');
+      setConfigResolutionError('');
+    }
+  }, [showConfigModal]);
 
   const handleResolutionChange = (dimension, value) => {
     if (dimension === 'width') {
@@ -280,8 +387,20 @@ function DeviceManagement() {
   };
 
   const handleSaveConfiguration = async () => {
-    if (!configName.trim()) {
-      alert('Please enter device name');
+    const trimmedName = configName.trim();
+    if (!trimmedName) {
+      setConfigNameError('Please enter device name');
+      return;
+    }
+    // Re-check in DB in case local state is stale
+    if (await asyncIsDuplicateActiveDeviceName(trimmedName, configDevice?.id)) {
+      setConfigNameError('Multiple active Device Types cannot exist with same name');
+      return;
+    }
+    // Validate resolution
+    const resErr = validateResolution(configOrientation, configResolutionWidth, configResolutionHeight);
+    if (resErr) {
+      setConfigResolutionError(resErr);
       return;
     }
     const updatedDevice = {
@@ -300,6 +419,8 @@ function DeviceManagement() {
     setDevices(all);
     setShowConfigModal(false);
     setConfigDevice(null);
+    setConfigNameError('');
+    setConfigResolutionError('');
   };
 
 
@@ -354,20 +475,19 @@ function DeviceManagement() {
 
   return (
     <div className="device-management">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>
-          <i className="bi bi-hdd-network me-2"></i>
-          Device Management
-        </h2>
-      </div>
 
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div></div>
-            <Button variant="primary" onClick={() => setShowAddModal(true)}>
-              <i className="bi bi-plus-circle me-2"></i>
+            <Button variant="primary" onClick={() => { setShowAddModal(true); setIsClone(false); setNewDeviceName(''); setNewDeviceNameError(''); setNewDeviceOrientation('both'); setNewDeviceResolutionWidth('1920'); setNewDeviceResolutionHeight('1080'); }}>
               Add Device Type
             </Button>
           </div>
+          <div className="d-flex justify-content-between align-items-center mb-4">
+        <h4>
+          <i className="bi bi-hdd-network me-2"></i>
+          Device Type List
+        </h4>
+      </div>
           {devices.length === 0 ? (
             <Alert variant="info">
               <i className="bi bi-info-circle me-2"></i>
@@ -378,15 +498,17 @@ function DeviceManagement() {
               <table className="table table-bordered align-middle">
                 <thead className="table-light">
                   <tr>
-                    <th>Device ID</th>
-                    <th>Device Name</th>
-                    <th>Resolution</th>
-                    <th>Possible Orientation</th>
+                    <th>Device Type ID</th>
+                    <th>Device Type</th>
+                    <th>Possible Orientations</th>
+                    <th>Resolution (W × H)</th>
+                    <th>Created By</th>
+                    <th>Created On</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map(device => {
+                  {devices.map((device, idx) => {
                     // Determine disabled status from DB active flag or fallback to localStorage
                     const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
                     // Determine if device is assigned to any store
@@ -395,7 +517,6 @@ function DeviceManagement() {
                       <tr key={device.id}>
                         <td>{device.id}</td>
                         <td className="font-monospace small">{device.name}</td>
-                        <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
                         <td>
                           {/* Display orientation as text only (Both / Landscape / Portrait) */}
                           <div>
@@ -407,22 +528,13 @@ function DeviceManagement() {
                             })()}
                           </div>
                         </td>
+                        <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
+                        <td className="font-monospace small">{device.createdBy || generateCreatorId(device, idx)}</td>
+                        <td>{device.createdAt ? formatDateShort(device.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000)))}</td>
                         <td>
                           {/* Disable/Enable Toggle Switch */}
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip id={`tooltip-edit-${device.id}`}>Edit/Configure</Tooltip>}
-                            >
-                              <Button 
-                                variant="primary" 
-                                size="sm"
-                                className="me-2"
-                                onClick={() => openConfigModal(device)}
-                              >
-                                <i className="bi bi-gear"></i>
-                              </Button>
-                            </OverlayTrigger>
+                            {/* Edit/Configure removed from actions per UX request */}
                             <OverlayTrigger
                               placement="top"
                               overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
@@ -478,13 +590,21 @@ function DeviceManagement() {
                 type="text"
                 placeholder="e.g., Samsung 4k display"
                 value={newDeviceName}
-                onChange={(e) => setNewDeviceName(e.target.value)}
+                onChange={(e) => { setNewDeviceName(e.target.value); if (newDeviceNameError) setNewDeviceNameError(''); }}
+                onBlur={() => {
+                  const n = newDeviceName.trim();
+                  if (!n) setNewDeviceNameError('Please enter device name');
+                  else if (isDuplicateActiveDeviceName(n)) setNewDeviceNameError('Multiple active Device Types cannot exist with same name');
+                  else setNewDeviceNameError('');
+                }}
+                isInvalid={!!newDeviceNameError}
               />
+              <Form.Control.Feedback type="invalid">{newDeviceNameError}</Form.Control.Feedback>
             </Form.Group>
 
             {/* Orientation */}
             <Form.Group className="mb-3">
-              <Form.Label>Possible Screen Orientation *</Form.Label>
+              <Form.Label>Possible Screen Orientations *</Form.Label>
               <div>
                 <Form.Check
                   type="radio"
@@ -526,9 +646,6 @@ function DeviceManagement() {
                   onChange={(e) => handleNewDeviceOrientationChange(e.target.value)}
                 />
               </div>
-              <Form.Text className="text-muted">
-                Resolution will auto-swap when changing orientation
-              </Form.Text>
             </Form.Group>
 
             {/* Display Resolution */}
@@ -538,13 +655,14 @@ function DeviceManagement() {
                 <Col md={5}>
                   <InputGroup>
                     <InputGroup.Text>Width</InputGroup.Text>
-                    <Form.Control
-                      type="number"
-                      value={newDeviceResolutionWidth}
-                      onChange={(e) => setNewDeviceResolutionWidth(e.target.value)}
-                      min="640"
-                      max="7680"
-                    />
+                        <Form.Control
+                          type="number"
+                          value={newDeviceResolutionWidth}
+                          onChange={(e) => { setNewDeviceResolutionWidth(e.target.value); if (newDeviceResolutionError) setNewDeviceResolutionError(''); }}
+                          onBlur={() => setNewDeviceResolutionError(validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight))}
+                          min="640"
+                          max="7680"
+                        />
                     <InputGroup.Text>px</InputGroup.Text>
                   </InputGroup>
                 </Col>
@@ -557,7 +675,8 @@ function DeviceManagement() {
                     <Form.Control
                       type="number"
                       value={newDeviceResolutionHeight}
-                      onChange={(e) => setNewDeviceResolutionHeight(e.target.value)}
+                      onChange={(e) => { setNewDeviceResolutionHeight(e.target.value); if (newDeviceResolutionError) setNewDeviceResolutionError(''); }}
+                      onBlur={() => setNewDeviceResolutionError(validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight))}
                       min="480"
                       max="4320"
                     />
@@ -565,69 +684,28 @@ function DeviceManagement() {
                   </InputGroup>
                 </Col>
               </Row>
+              {newDeviceOrientation === 'both' && (
+                <Form.Text className="text-muted d-block mt-2">
+                <strong>Note:</strong> If both orientations are possible, enter the resolution for landscape mode.
+                </Form.Text>
+              )}
+              {newDeviceResolutionError && (
+                <Form.Text className="text-danger d-block mt-2">{newDeviceResolutionError}</Form.Text>
+              )}
               <Form.Text className="text-muted">
                 <i className="bi bi-info-circle me-1"></i>
-                Example: 1920×1080 (Full HD)
+                Example: 1920×1080 
               </Form.Text>
+              
             </Form.Group>
-
-            {/* Common Resolutions */}
-            <Form.Group className="mb-3">
-              <Form.Label>Common Resolutions</Form.Label>
-              <div className="d-flex flex-wrap gap-2">
-                <Button 
-                  variant="outline-secondary" 
-                  size="sm"
-                  onClick={() => {
-                    setNewDeviceResolutionWidth('1920');
-                    setNewDeviceResolutionHeight('1080');
-                  }}
-                >
-                  1920×1080 (Full HD)
-                </Button>
-                <Button 
-                  variant="outline-secondary" 
-                  size="sm"
-                  onClick={() => {
-                    setNewDeviceResolutionWidth('1440');
-                    setNewDeviceResolutionHeight('900');
-                  }}
-                >
-                  1440×900
-                </Button>
-                <Button 
-                  variant="outline-secondary" 
-                  size="sm"
-                  onClick={() => {
-                    setNewDeviceResolutionWidth('3840');
-                    setNewDeviceResolutionHeight('2160');
-                  }}
-                >
-                  3840×2160 (4K)
-                </Button>
-                <Button 
-                  variant="outline-secondary" 
-                  size="sm"
-                  onClick={() => {
-                    setNewDeviceResolutionWidth('1080');
-                    setNewDeviceResolutionHeight('1920');
-                  }}
-                >
-                  1080×1920 (Portrait)
-                </Button>
-              </div>
-            </Form.Group>
-
-      
           </Form>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => { setShowAddModal(false); setIsClone(false); }}>
-            Cancel
+          <Modal.Footer>
+          <Button variant="secondary" onClick={handleResetAddModal}>
+            Reset
           </Button>
-          <Button variant="primary" onClick={handleAddDevice}>
-            <i className="bi bi-plus-circle me-2"></i>
-            {isClone ? 'Clone Device' : 'Add Device'}
+          <Button variant="primary" onClick={handleAddDevice} disabled={!!newDeviceNameError || !newDeviceName.trim() || !!newDeviceResolutionError}>
+            Submit
           </Button>
         </Modal.Footer>
       </Modal>
@@ -653,9 +731,17 @@ function DeviceManagement() {
               <Form.Control
                 type="text"
                 value={configName}
-                onChange={(e) => setConfigName(e.target.value)}
+                onChange={(e) => { setConfigName(e.target.value); if (configNameError) setConfigNameError(''); }}
+                onBlur={() => {
+                  const n = configName.trim();
+                  if (!n) setConfigNameError('Please enter device name');
+                  else if (isDuplicateActiveDeviceName(n, configDevice?.id)) setConfigNameError('Multiple active Device Types cannot exist with same name');
+                  else setConfigNameError('');
+                }}
                 placeholder="e.g., Store LA-01 Display"
+                isInvalid={!!configNameError}
               />
+              <Form.Control.Feedback type="invalid">{configNameError}</Form.Control.Feedback>
             </Form.Group>
             {/* MAC Address */}
             <Form.Group className="mb-3">
@@ -682,6 +768,11 @@ function DeviceManagement() {
             <Form.Group className="mb-3">
               <Form.Label>Screen Orientation *</Form.Label>
               <div>
+                {configOrientation === 'both' && (
+                  <Form.Text className="text-muted d-block mt-2">
+                    If both orientations are possible, enter the resolution for landscape mode.
+                  </Form.Text>
+                )}
                 <Form.Check
                   type="radio"
                   id="config-orientation-both"
@@ -734,7 +825,8 @@ function DeviceManagement() {
                     <Form.Control
                       type="number"
                       value={configResolutionWidth}
-                      onChange={(e) => handleResolutionChange('width', e.target.value)}
+                      onChange={(e) => { handleResolutionChange('width', e.target.value); if (configResolutionError) setConfigResolutionError(''); }}
+                      onBlur={() => setConfigResolutionError(validateResolution(configOrientation, configResolutionWidth, configResolutionHeight))}
                       min="640"
                       max="7680"
                     />
@@ -750,7 +842,8 @@ function DeviceManagement() {
                     <Form.Control
                       type="number"
                       value={configResolutionHeight}
-                      onChange={(e) => handleResolutionChange('height', e.target.value)}
+                      onChange={(e) => { handleResolutionChange('height', e.target.value); if (configResolutionError) setConfigResolutionError(''); }}
+                      onBlur={() => setConfigResolutionError(validateResolution(configOrientation, configResolutionWidth, configResolutionHeight))}
                       min="480"
                       max="4320"
                     />
@@ -762,6 +855,9 @@ function DeviceManagement() {
                 <i className="bi bi-info-circle me-1"></i>
                 Resolution automatically swaps when changing orientation
               </Form.Text>
+              {configResolutionError && (
+                <Form.Text className="text-danger d-block mt-2">{configResolutionError}</Form.Text>
+              )}
             </Form.Group>
 
             {/* Common Resolutions */}
@@ -826,7 +922,7 @@ function DeviceManagement() {
           <Button variant="secondary" onClick={() => setShowConfigModal(false)}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSaveConfiguration}>
+          <Button variant="primary" onClick={handleSaveConfiguration} disabled={!!configNameError || !configName.trim() || !!configResolutionError}>
             <i className="bi bi-check-circle me-2"></i>
             Save Configuration
           </Button>
@@ -950,16 +1046,16 @@ function DeviceManagement() {
       <Modal.Body>
         <div className="text-center py-3">
           <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
-          <p className="mt-3 mb-0">Are you sure you want to disable this device?</p>
-          <p className="text-danger">This action cannot be undone and you will not be able to enable it again.</p>
+          <p className="mt-3 mb-0">Do you confirm to de-activate the device?</p>
+          <p className="">This action cannot be undone.</p>
         </div>
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={() => setShowDisableConfirm(false)}>
-          Cancel
+          Go Back
         </Button>
         <Button variant="danger" onClick={confirmDisableDevice}>
-          Disable
+          Proceed
         </Button>
       </Modal.Footer>
     </Modal>
