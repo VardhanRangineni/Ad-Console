@@ -956,6 +956,104 @@ function DeviceManagement() {
                             </Button>
                         </Col>
                       </Row>
+                      <h5 className="mt-4">Assigned Devices</h5>
+                      <div className="table-responsive mb-4">
+                        <table className="table table-bordered align-middle">
+                          <thead className="table-light">
+                            <tr>
+                              <th>Device Type</th>
+                              <th>Device Type ID</th>
+                              <th>MAC Address</th>
+                              <th>POS MAC</th>
+                              <th>Orientation</th>
+                              <th>Status</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {assignTabAssignments.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="text-center text-muted">No records found</td>
+                              </tr>
+                            ) : (
+                              assignTabAssignments.map(device => (
+                                <tr key={device.assignmentId}>
+                                  <td>{device.name}</td>
+                                  <td>{device.id}</td>
+                                  <td>{device.macAddress}</td>
+                                  <td>{device.posMacAddress || <span className="text-muted">-</span>}</td>
+                                  <td>
+                                    <div className="d-flex gap-2 align-items-center">
+                                      {assignTabEditMode && device.orientation === 'both' ? (
+                                        <>
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`assign-orientation-horizontal-${device.assignmentId}`}
+                                            name={`assign-orientation-${device.assignmentId}`}
+                                            value="horizontal"
+                                            label="Landscape"
+                                            checked={device.orientation === 'horizontal'}
+                                            onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'horizontal' } : d))}
+                                          />
+                                          <Form.Check
+                                            inline
+                                            type="radio"
+                                            id={`assign-orientation-vertical-${device.assignmentId}`}
+                                            name={`assign-orientation-${device.assignmentId}`}
+                                            value="vertical"
+                                            label="Portrait"
+                                            checked={device.orientation === 'vertical'}
+                                            onChange={() => setAssignTabAssignments(prev => prev.map(d => d.assignmentId === device.assignmentId ? { ...d, orientation: 'vertical' } : d))}
+                                          />
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-muted small">{device.orientation === 'both' ? 'Both' : (device.orientation === 'horizontal' ? 'Landscape' : (device.orientation === 'vertical' ? 'Portrait' : 'N/A'))}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <Badge bg={device.active ? 'success' : 'danger'}>
+                                      {device.active ? 'Online' : 'Offline'}
+                                    </Badge>
+                                  </td>
+                                  <td className="d-flex gap-2 align-items-center">
+                                    <Form.Check
+                                      type="switch"
+                                      id={`switch-assign-${device.assignmentId}`}
+                                      checked={device.active}
+                                      onChange={() => {
+                                        setAssignTabAssignments(prev => prev.map(d =>
+                                          d.assignmentId === device.assignmentId ? { ...d, active: !d.active } : d
+                                        ));
+                                      }}
+                                      label={device.active ? 'Online' : 'Offline'}
+                                    />
+                                    <OverlayTrigger
+                                      placement="top"
+                                      overlay={<Tooltip id={`tooltip-delete-assign-${device.assignmentId}`}>Delete</Tooltip>}
+                                    >
+                                      <Button variant="outline-danger" size="sm" onClick={() => {
+                                        setAssignTabAssignments(prev => prev.filter(d => d.assignmentId !== device.assignmentId));
+                                      }}>
+                                        <i className="bi bi-trash"></i>
+                                      </Button>
+                                    </OverlayTrigger>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                        <div className="d-flex justify-content-end mt-3">
+                          <Button variant="primary" onClick={handleAssignTabSaveChanges}>
+                            <i className="bi bi-save me-2"></i>
+                            Save Changes
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </>
@@ -968,9 +1066,8 @@ function DeviceManagement() {
                   Download
                 </Button>
               </div>
-              {storeDeviceMap.length > 0 ? (
-                <div className="table-responsive">
-                  <table className="table table-bordered align-middle">
+              <div className="table-responsive">
+                <table className="table table-bordered align-middle">
                     <thead className="table-light">
                       <tr>
                         <th>
@@ -1022,16 +1119,23 @@ function DeviceManagement() {
                       </tr>
                     </thead>
                     <tbody>
-                      {storeDeviceMap
-                        .filter(store => {
+                      {(() => {
+                        const filtered = storeDeviceMap.filter(store => {
                           // All filters are case-insensitive substring match
                           const idMatch = listViewStoreIdFilter.trim() === '' || store.id.toLowerCase().includes(listViewStoreIdFilter.trim().toLowerCase());
                           const nameMatch = listViewStoreNameFilter.trim() === '' || (store.name && store.name.toLowerCase().includes(listViewStoreNameFilter.trim().toLowerCase()));
                           const cityMatch = listViewCityFilter.trim() === '' || (store.area && store.area.toLowerCase().includes(listViewCityFilter.trim().toLowerCase()));
                           const stateMatch = listViewStateFilter.trim() === '' || (store.state && store.state.toLowerCase().includes(listViewStateFilter.trim().toLowerCase()));
                           return idMatch && nameMatch && cityMatch && stateMatch;
-                        })
-                        .map(store => (
+                        });
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={6} className="text-center text-muted">No records found</td>
+                            </tr>
+                          );
+                        }
+                        return filtered.map(store => (
                           <tr key={store.id}>
                             <td>{store.id}</td>
                             <td>{store.name}</td>
@@ -1057,16 +1161,11 @@ function DeviceManagement() {
                               </OverlayTrigger>
                             </td>
                           </tr>
-                        ))}
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <Alert variant="info">
-                  <i className="bi bi-info-circle me-2"></i>
-                  No devices have been assigned to a store yet.
-                </Alert>
-              )}
             </Tab>
           </Tabs>
       {/* End sub-tabs */}

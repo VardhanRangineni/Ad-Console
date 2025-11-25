@@ -524,14 +524,8 @@ function DeviceManagement() {
           Device Type List
         </h4>
       </div>
-          {devices.length === 0 ? (
-            <Alert variant="info">
-              <i className="bi bi-info-circle me-2"></i>
-              No devices registered yet. Click "Add Device Type" to get started.
-            </Alert>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-bordered align-middle">
+          <div className="table-responsive">
+            <table className="table table-bordered align-middle">
                 <thead className="table-light">
                   <tr>
                     <th>Device Type ID</th>
@@ -544,7 +538,12 @@ function DeviceManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {devices.map((device, idx) => {
+                  {devices.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center text-muted">No records found</td>
+                    </tr>
+                  ) : (
+                    devices.map((device, idx) => {
                     // Determine disabled status from DB active flag or fallback to localStorage
                     const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
                     // Determine if device is assigned to any store
@@ -605,11 +604,11 @@ function DeviceManagement() {
                         </td>
                       </tr>
                     );
-                  })}
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
         
 
       {/* Add Device Modal */}
