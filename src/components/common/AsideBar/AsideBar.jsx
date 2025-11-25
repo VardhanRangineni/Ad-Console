@@ -25,8 +25,8 @@ function AsideBar() {
       icon: 'bi-hdd-network',
       label: 'Devices',
       submenu: [
-        { to: '/devices', label: 'Add Device' },
-        { to: '/settings', label: 'Device Store Mapping' },
+        { to: '/devices', label: 'Device Types' },
+        { to: '/settings', label: 'Store Device Mapping' },
       ],
     },
     // Monitor page removed

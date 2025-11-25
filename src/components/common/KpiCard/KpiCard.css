@@ -1,0 +1,50 @@
+.kpi-card { cursor: pointer; color: #fff; border: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
+.kpi-card:hover { transform: translateY(-4px); }
+.kpi-card.bg-primary { background: #007bff; }
+.kpi-card.bg-info { background: #17a2b8; }
+.kpi-card.bg-warning { background: #ffc107; color: #212529; }
+
+/* Ensure text and labels are white for strong background kpis */
+.kpi-card.bg-primary .kpi-title,
+.kpi-card.bg-primary .kpi-left-label,
+.kpi-card.bg-primary .kpi-right-label,
+.kpi-card.bg-primary .kpi-subitems,
+.kpi-card.bg-primary .kpi-main-value,
+.kpi-card.bg-primary .kpi-right-value { color: #ffffff !important; opacity: 0.95; }
+
+.kpi-card.bg-info .kpi-title,
+.kpi-card.bg-info .kpi-left-label,
+.kpi-card.bg-info .kpi-right-label,
+.kpi-card.bg-info .kpi-subitems,
+.kpi-card.bg-info .kpi-main-value,
+.kpi-card.bg-info .kpi-right-value { color: #ffffff !important; opacity: 0.95; }
+.kpi-body { min-height: 120px; display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; position: relative; padding-bottom: 14px; padding-top: 10px; }
+.kpi-left-main .kpi-main-value,
+.kpi-right-value { font-size: 1.95rem; font-weight: 600; }
+.kpi-title { color: inherit; opacity: 0.8; font-size: 0.9rem; margin-bottom: 4px; font-weight: 600; }
+.kpi-label-row { margin-top: 0; }
+.kpi-subitems { opacity: 0.95; }
+.kpi-right-value { font-size: 1.95rem; font-weight: 600; }
+.kpi-right-label { opacity: 0.9; margin-bottom: 6px; }
+.kpi-left-label { opacity: 0.9; margin-bottom: 6px; }
+.kpi-right { display: flex; flex-direction: column; justify-content: center; align-items: flex-end; min-height: 64px; }
+.kpi-left { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; min-height: 64px; }
+.kpi-left-label { opacity: 0.9; margin-bottom: 6px; }
+.kpi-card:focus { outline: none; box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); }
+
+/* Ensure consistent height across different card variants */
+.kpi-card .kpi-body { min-height: 120px; }
+
+/* Make sure the main number and right number align and don't exceed available space */
+.kpi-left-main, .kpi-right-main { display: flex; align-items: center; gap: 0.5rem; min-width: 64px; flex-wrap: nowrap; cursor: pointer; }
+.kpi-main-value, .kpi-right-value { line-height: 1; }
+.kpi-main-row { align-items: center; }
+.kpi-inline-subitems { display: none; }
+.kpi-inline-subitems .me-2 { margin-right: 0.5rem; }
+.kpi-inline-subitems .me-3 { margin-right: 0.75rem; }
+.kpi-inline-subitems .badge { font-size: 0.75rem; padding: 0.25rem 0.4rem; }
+.kpi-inline-subitems div { display: inline-flex; align-items: center; }
+.kpi-left, .kpi-right { position: relative; }
+.kpi-bottom-left, .kpi-bottom-right { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); gap: 0.5rem; display: flex; align-items: center; }
+.kpi-bottom-left .me-3, .kpi-bottom-right .me-3 { margin-right: 0.5rem; }
+.kpi-bottom-left .badge, .kpi-bottom-right .badge { font-size: 0.75rem; padding: 0.25rem 0.4rem; }

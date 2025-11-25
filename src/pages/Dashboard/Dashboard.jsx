@@ -1,10 +1,11 @@
 // src/pages/Dashboard/Dashboard.jsx
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pie, Bar, getElementsAtEvent } from 'react-chartjs-2';
-import { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
-import { Row, Col, Card, Badge, Modal, Button } from 'react-bootstrap';
+import { Chart, ArcElement, Tooltip as ChartJsTooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
+import { Row, Col, Card, Badge, Modal, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import KpiCard from '../../components/common/KpiCard/KpiCard';
 import { getAllDevices, getAllAssignments } from '../../services/deviceIndexeddb';
 import { storeList } from '../../data/storeList';
 import { mockLocations } from '../../data/mockLocations';
@@ -12,10 +13,18 @@ import { getAllContent } from '../../services/indexeddb';
 import { getAllPlaylistsFromDB } from '../ManagePlaylists/ManagePlaylists.jsx';
 // activity log removed on dashboard to simplify UI
 import './Dashboard.css';
-Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+Chart.register(ArcElement, ChartJsTooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 function Dashboard() {
   const navigate = useNavigate();
+  // Stable navigation callbacks to avoid re-creating functions on render
+  const handleAssignedDevicesClick = useCallback(() => navigate('/devices?sub=listView'), [navigate]);
+  const handleAssignedStoresClick = useCallback(() => navigate('/settings?tab=listView'), [navigate]);
+  const handleActivePlaylistsClickLeft = useCallback(() => navigate('/manage-playlists?tab=approved'), [navigate]);
+  const handleActivePlaylistsClickRight = useCallback(() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=30'), [navigate]);
+  const handleContentImagesClick = useCallback(() => navigate('/content-library?filter=hasImages'), [navigate]);
+  const handleContentVideosClick = useCallback(() => navigate('/content-library?filter=hasVideos'), [navigate]);
+  const handleBarClick = useCallback(() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=5'), [navigate]);
   const [playlists, setPlaylists] = useState([]);
   const [indexedDevices, setIndexedDevices] = useState(null);
   const [loadingIndexedDevices, setLoadingIndexedDevices] = useState(true);
@@ -40,16 +49,17 @@ function Dashboard() {
   }, []);
 
   // Use indexedDB data when loaded (even if empty); while loading fall back to context devices
-  const devicesToUse = indexedDevices || [];
-  const disabledList = JSON.parse(localStorage.getItem('disabledDevices') || '[]');
-  const isDeviceActive = (d) => {
+  const devicesToUse = useMemo(() => indexedDevices || [], [indexedDevices]);
+  // Memoize deviceById to avoid rebuilding on each render
+  const deviceById = useMemo(() => new Map((devicesToUse || []).map(d => [normalizeId(d.id || d.deviceId), d])), [devicesToUse]);
+  const disabledList = useMemo(() => JSON.parse(localStorage.getItem('disabledDevices') || '[]'), []);
+  const isDeviceActive = useCallback((d) => {
     if (typeof d?.active === 'boolean') return d.active;
     if (d?.status) return d.status === 'online';
     return !disabledList.includes(d.id);
-  };
-  const onlineDevices = devicesToUse.filter(d => isDeviceActive(d)).length;
-  const totalDevices = devicesToUse.length;
-  const offlineDevices = totalDevices - onlineDevices;
+  }, [disabledList]);
+  // onlineDevices & totalDevices were unused in the UI; remove to avoid lint warnings
+  // offlineDevices intentionally removed (not used in this UI)
   // assignedDevicesCount removed (not in use) to avoid ESLint no-unused-vars warning
 
   // Prefer devices loaded from indexedDB
@@ -95,67 +105,68 @@ function Dashboard() {
       clearInterval(interval);
       window.removeEventListener('contentUpdate', onContentUpdate);
     };
-  });
+  }, []);
 
   // Content counts: prefer 'active' only for the main KPI
   // Only consider approved and active playlists (match ManagePlaylists approved rendering)
-  const approvedPlaylists = playlists.filter(p => p.status === 'approved' && !p.inactive);
+  const approvedPlaylists = useMemo(() => (playlists || []).filter(p => p.status === 'approved' && !p.inactive), [playlists]);
   // Calculate expiring approved playlists (end date within 30 days)
-  const today = new Date();
-  const thirtyDaysFromNow = new Date(today);
-  thirtyDaysFromNow.setDate(today.getDate() + 30);
-  const expiringPlaylists = approvedPlaylists.filter(p => {
+  const today = useMemo(() => new Date(), []);
+  const thirtyDaysFromNow = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + 30);
+    return d;
+  }, [today]);
+  const expiringPlaylists = useMemo(() => approvedPlaylists.filter(p => {
     if (!p.endDate) return false;
     const end = new Date(p.endDate);
     return end >= today && end <= thirtyDaysFromNow;
-  });
-  const totalContent = allContent ? allContent.length : 0;
-  const activeContentCount = allContent ? allContent.filter(c => c.active !== false).length : 0;
-  const inactiveContentCount = Math.max(0, totalContent - activeContentCount);
+  }), [approvedPlaylists, today, thirtyDaysFromNow]);
+  // totalContent & activeContentCount removed as they are not used in the UI to avoid lint warnings
+  // inactiveContentCount intentionally removed as not used by UI to avoid lint warnings
 
   // Assigned content count - count unique contentId from assignments that are currently in date range
-  const assignedContentCount = (() => {
-    const unique = new Set();
-    // Count contentId from content assignments (if any)
-    for (const a of assignments || []) {
-      const { contentId, startDate, endDate } = a;
-      if (!contentId) continue;
-      // consider assignment active if no dates or today within range
-      if (!startDate && !endDate) {
-        unique.add(contentId);
-        continue;
-      }
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
-      const within = (!start || start <= today) && (!end || end >= today);
-      if (within) unique.add(contentId);
-    }
-    // Also include content selected in approved playlists that are active (start/end date range or no dates)
-    for (const p of approvedPlaylists || []) {
-      if (!p.selectedContent || !Array.isArray(p.selectedContent) || p.selectedContent.length === 0) continue;
-      const start = p.startDate ? new Date(p.startDate) : null;
-      const end = p.endDate ? new Date(p.endDate) : null;
-      const within = (!start || start <= today) && (!end || end >= today);
-      if (!within) continue;
-      for (const cid of p.selectedContent) {
-        if (cid) unique.add(cid);
-      }
-    }
-    return unique.size;
-  })();
+  // assigned content count calculation removed (not currently displayed)
+
+  // Assigned Devices and assigned store counts
+  // (computed below - dependent on deviceToStoreMap)
+
+  // Content map to resolve content type by id
+  // Memoize contentById to avoid recalculating map on each render
+  // contentById removed (no longer used) to avoid lint warnings; compute inline when needed in future
+
+  // Helpers to classify content items
+  const contentHasImage = (c) => {
+    if (!c) return false;
+    if (c.type === 'image') return true;
+    if (Array.isArray(c.slides)) return c.slides.some(s => s && s.type === 'image');
+    return false;
+  };
+  const contentHasVideo = (c) => {
+    if (!c) return false;
+    if (c.type === 'video') return true;
+    if (Array.isArray(c.slides)) return c.slides.some(s => s && s.type === 'video');
+    return false;
+  };
+
+  const activeContent = useMemo(() => (allContent || []).filter(c => c && c.active !== false), [allContent]);
+  const contentWithImagesCount = useMemo(() => activeContent.filter(c => contentHasImage(c)).length, [activeContent]);
+  const contentWithVideosCount = useMemo(() => activeContent.filter(c => contentHasVideo(c)).length, [activeContent]);
+
+  // videoOnlyPlaylistsCount and imageOnlyPlaylistsCount removed as they are unused in the UI
 
   // (Click handler for expiring playlists badge removed for now)
   // Prebuild storeId -> state mapping helpers
-  const normalizeId = (v) => {
+  function normalizeId(v) {
     if (v === null || v === undefined) return null;
     try { return String(v).trim(); } catch (err) { return v; }
-  };
-  const storeById = new Map(storeList.map(s => [normalizeId(s.id), s]));
-  const normalizeState = (s) => {
+  }
+  const storeById = useMemo(() => new Map(storeList.map(s => [normalizeId(s.id), s])), []);
+  function normalizeState(s) {
     if (s === null || s === undefined) return null;
     try { return String(s).trim(); } catch (err) { return s; }
-  };
-  const mockStoreIdToState = (() => {
+  }
+  const mockStoreIdToState = useMemo(() => {
     const map = new Map();
     function build(node, curState) {
       if (!node) return;
@@ -171,21 +182,46 @@ function Dashboard() {
     }
     build(mockLocations, null);
     return map;
-  })();
+  }, []);
 
-  // State-wise device counts (use devices -> map to store state)
-  const stateCounts = (() => {
+  // Prebuild a global deviceId->storeId mapping using assignments (used by several metrics)
+  const deviceToStoreMap = useMemo(() => {
     const map = new Map();
-    // Build device-based sets per state
-    const deviceStateSets = new Map(); // state -> Set(deviceId)
-    const deviceToStore = new Map();
     for (const a of assignments || []) {
       if (a && (a.deviceId !== undefined && a.deviceId !== null) && (a.locationId || a.storeId || a.storeIdInput || a.store)) {
         const did = normalizeId(String(a.deviceId));
         const sid = normalizeId(String(a.locationId || a.storeId || a.storeIdInput || a.store));
-        if (!deviceToStore.has(did)) deviceToStore.set(did, sid);
+        if (!map.has(did)) map.set(did, sid);
       }
     }
+    return map;
+  }, [assignments]);
+
+  // Assigned Devices and assigned store counts (dependent on assignments)
+  const assignedAssignments = useMemo(() => (assignments || []).filter(a => a && (a.deviceId !== undefined && a.deviceId !== null) && (a.locationId || a.storeId || a.storeIdInput || a.store)), [assignments]);
+  const assignedDevicesCount = assignedAssignments.length;
+  const assignedOnlineCount = useMemo(() => assignedAssignments.filter(a => {
+    if (typeof a.active === 'boolean') return a.active === true;
+    const dev = deviceById.get(normalizeId(String(a.deviceId)));
+    if (dev) return isDeviceActive(dev);
+    return false;
+  }).length, [assignedAssignments, deviceById, isDeviceActive]);
+  const assignedOfflineCount = Math.max(0, assignedDevicesCount - assignedOnlineCount);
+  const uniqueAssignedStoreCount = useMemo(() => {
+    const s = new Set();
+    for (const a of assignedAssignments) {
+      const sid = normalizeId(a.locationId || a.storeId || a.storeIdInput || a.store);
+      if (sid) s.add(String(sid));
+    }
+    return s.size;
+  }, [assignedAssignments]);
+
+  // State-wise device counts (use devices -> map to store state)
+  const stateCounts = useMemo(() => {
+    const map = new Map();
+    // Build device-based sets per state
+    const deviceStateSets = new Map(); // state -> Set(deviceId)
+    const deviceToStore = deviceToStoreMap;
 
     for (const d of devicesToUse) {
       if (!d) continue;
@@ -242,7 +278,7 @@ function Dashboard() {
       map.set(st, union.size);
     });
     return map;
-  })();
+  }, [devicesToUse, assignments, deviceToStoreMap, storeById, mockStoreIdToState]);
 
   // Minimal delete handler for Delete Confirmation Modal
   // Dashboard currently doesn't implement a delete flow here; keep this as a safe no-op
@@ -252,31 +288,96 @@ function Dashboard() {
 
   // Build a full list of states from storeList and mockLocations; ensure chart shows all states
   // Build a full list of states from storeList, mockLocations and devices; ensure chart shows all states
-  const statesFromDevices = new Set((devicesToUse || []).map(d => normalizeState(d && d.state)).filter(Boolean));
+  const statesFromDevices = useMemo(() => new Set((devicesToUse || []).map(d => normalizeState(d && d.state)).filter(Boolean)), [devicesToUse]);
   // Extract from assignments their known states via store mapping (storeList or mockLocations)
-  const statesFromAssignments = new Set();
-  (assignments || []).forEach(a => {
-    if (!a) return;
-    if (a.state) {
-      statesFromAssignments.add(normalizeState(a.state));
-    }
-    const sid = String(a.locationId || a.storeId || a.storeIdInput || a.store);
-    if (!sid) return;
-    const s = storeById.get(normalizeId(String(sid)));
-    if (s && s.state) statesFromAssignments.add(normalizeState(s.state));
-    else if (mockStoreIdToState.has(String(sid)) || mockStoreIdToState.has(normalizeId(sid))) statesFromAssignments.add(normalizeState(mockStoreIdToState.get(String(sid)) || mockStoreIdToState.get(normalizeId(sid))));
-  });
-  const stateSetAll = new Set(storeList.map(s => normalizeState(s.state)).filter(Boolean));
-  mockStoreIdToState.forEach((st) => stateSetAll.add(st));
-  statesFromDevices.forEach(st => stateSetAll.add(st));
-  statesFromAssignments.forEach(st => stateSetAll.add(st));
-  // Also add any states that ended up in counts but were not in storeList/mockLocations/devices/assignments sets
-  stateCounts.forEach((c, k) => stateSetAll.add(k));
-  const stateLabels = Array.from(stateSetAll).sort();
-  const stateData = stateLabels.map(l => stateCounts.get(l) || 0);
+  const statesFromAssignments = useMemo(() => {
+    const sset = new Set();
+    (assignments || []).forEach(a => {
+      if (!a) return;
+      if (a.state) sset.add(normalizeState(a.state));
+      const sid = String(a.locationId || a.storeId || a.storeIdInput || a.store);
+      if (!sid) return;
+      const s = storeById.get(normalizeId(String(sid)));
+      if (s && s.state) sset.add(normalizeState(s.state));
+      else if (mockStoreIdToState.has(String(sid)) || mockStoreIdToState.has(normalizeId(sid))) sset.add(normalizeState(mockStoreIdToState.get(String(sid)) || mockStoreIdToState.get(normalizeId(sid))));
+    });
+    return sset;
+  }, [assignments, storeById, mockStoreIdToState]);
+  const [stateLabels, stateData] = useMemo(() => {
+    const stateSetAll = new Set(storeList.map(s => normalizeState(s.state)).filter(Boolean));
+    mockStoreIdToState.forEach((st) => stateSetAll.add(st));
+    statesFromDevices.forEach(st => stateSetAll.add(st));
+    statesFromAssignments.forEach(st => stateSetAll.add(st));
+    // Also add any states that ended up in counts but were not in storeList/mockLocations/devices/assignments sets
+    stateCounts.forEach((_, k) => stateSetAll.add(k));
+    const labels = Array.from(stateSetAll).sort();
+    const data = labels.map(l => stateCounts.get(l) || 0);
+    return [labels, data];
+  }, [mockStoreIdToState, statesFromDevices, statesFromAssignments, stateCounts]);
   // Only show states in the pie that have a non-zero count
-  const visibleStateLabels = stateLabels.filter((_, i) => stateData[i] > 0);
-  const visibleStateData = visibleStateLabels.map(l => stateCounts.get(l) || 0);
+  const [visibleStateLabels, visibleStateData] = useMemo(() => {
+    const labels = stateLabels.filter((_, i) => stateData[i] > 0);
+    const data = labels.map(l => stateCounts.get(l) || 0);
+    return [labels, data];
+  }, [stateLabels, stateData, stateCounts]);
+
+  // Pie chart data and options memoized to avoid repeated calculation during interaction
+  const pieChartData = useMemo(() => ({
+    labels: visibleStateLabels,
+    datasets: [
+      {
+        data: visibleStateData,
+        backgroundColor: ['#007bff', '#28a745', '#ffc107', '#17a2b8', '#6f42c1', '#dc3545', '#fd7e14', '#20c997'].slice(0, visibleStateLabels.length),
+        borderWidth: 1,
+      }
+    ]
+  }), [visibleStateLabels, visibleStateData]);
+  const pieChartOptions = useMemo(() => ({
+    plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 12, padding: 12 } } },
+    responsive: true,
+    maintainAspectRatio: false,
+  }), []);
+
+  // Bar chart: next 5 days
+  const barChartData = useMemo(() => {
+    const labels = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i + 1);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    });
+    const dataPoints = Array.from({ length: 5 }, (_, i) => {
+      const day = new Date(today);
+      day.setDate(today.getDate() + i + 1);
+      return approvedPlaylists.filter(p => {
+        if (!p.endDate) return false;
+        const end = new Date(p.endDate);
+        return (
+          end.getFullYear() === day.getFullYear() &&
+          end.getMonth() === day.getMonth() &&
+          end.getDate() === day.getDate()
+        );
+      }).length;
+    });
+    return {
+      labels,
+      datasets: [{ label: 'Expiring Playlists', backgroundColor: '#ffc107', borderColor: '#ff9800', borderWidth: 1, data: dataPoints }]
+    };
+  }, [approvedPlaylists, today]);
+  const barChartOptions = useMemo(() => ({
+    plugins: { legend: { display: false } },
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    onHover: (event, elements) => {
+      try {
+        if (event && event.native && event.native.target) {
+          event.native.target.style.cursor = (elements && elements.length) ? 'pointer' : 'default';
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }), []);
   // Removed debug for state labels & data
 
   return (
@@ -289,97 +390,67 @@ function Dashboard() {
       {/* Stats Cards */}
       <Row className="mb-4">
         <Col md={4} sm={6} className="mb-3">
-          <Card
-            className="stat-card bg-primary text-white"
-            style={{ minHeight: 140, cursor: 'pointer' }}
-            onClick={() => navigate('/devices')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/devices'); }}
-          >
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
-                <div>
-                  <h6 className="text-white-50 mb-2">Total Devices</h6>
-                  <h2 className="mb-0">
-                    {loadingIndexedDevices ? (
-                      <div className="spinner-border spinner-border-sm text-light" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                      </div>
-                    ) : totalDevices}
-                  </h2>
-                  <div className="d-flex align-items-center mt-2 small screen-stats">
-                    <div className="me-3">Active: <Badge bg="success">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : onlineDevices}</Badge></div>
-                    <div>Inactive: <Badge bg="danger">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : offlineDevices}</Badge></div>
-                  </div>
+          <KpiCard
+            title="Assigned Devices"
+            bgClass="bg-primary"
+            left={{
+              sub: '',
+              main: loadingIndexedDevices ? (
+                <div className="spinner-border spinner-border-sm text-light" role="status">
+                  <span className="visually-hidden">Loading...</span>
                 </div>
-                <i className="bi bi-tv stat-icon"></i>
-              </div>
-            </Card.Body>
-            {/* Removed dev-only footer to keep KPI card clean */}
-          </Card>
-        </Col>
-
-        {/* Active Screens KPI removed by request */}
-
-        <Col md={4} sm={6} className="mb-3">
-          <Card
-            className="stat-card bg-info text-white"
-            style={{ minHeight: 140, cursor: 'pointer' }}
-            onClick={() => navigate('/assign')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/assign'); }}
-          >
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
-                <div>
-                  <h6 className="text-white-50 mb-2">Assigned Content</h6>
-                    <h2 className="mb-0">{assignedContentCount}</h2>
-                  <div className="d-flex align-items-center mt-2 small screen-stats">
-                    <div>Inactive: <Badge bg="danger">{inactiveContentCount}</Badge></div>
-                  </div>
-                </div>
-                <i className="bi bi-collection-play stat-icon"></i>
-              </div>
-            </Card.Body>
-          </Card>
+              ) : assignedDevicesCount,
+              subItems: [
+                <span key="online">Online: <Badge bg="success">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : assignedOnlineCount}</Badge></span>,
+                <span key="offline">Offline: <Badge bg="danger">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : assignedOfflineCount}</Badge></span>
+              ]
+            }}
+            right={{ main: uniqueAssignedStoreCount, sub: 'Assigned Stores' }}
+            onClickLeft={handleAssignedDevicesClick}
+            onClickRight={handleAssignedStoresClick}
+          />
         </Col>
 
         <Col md={4} sm={6} className="mb-3">
-            <Card
-            className="stat-card bg-warning text-white"
-            style={{ minHeight: 140, cursor: 'pointer' }}
-            onClick={() => navigate('/manage-playlists?expiring=1&expiringDays=30')}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/manage-playlists?expiring=1&expiringDays=30'); }}
-          >
-            <Card.Body>
-              <div className="d-flex justify-content-between align-items-center" style={{ minHeight: 90 }}>
-                <div>
-                  <h6 className="text-white-50 mb-2">Approved Playlists Expiring in 30 Days</h6>
-                  <h2 className="mb-0">
-                    <Badge
-                      bg="danger"
-                      pill
-                      style={{ fontSize: '1.5rem', verticalAlign: 'middle' }}
-                      title="Playlists expiring in 30 days"
-                    >
-                      {expiringPlaylists.length} <i className="bi bi-exclamation-triangle"></i>
-                    </Badge>
-                  </h2>
-                  {expiringPlaylists.length > 0 && (
-                    <div className="small mt-1 text-danger">
-                      expiring soon
-                    </div>
-                  )}
+          <KpiCard
+            title="Active Playlists"
+            bgClass="bg-info"
+            left={{ sub: '', main: approvedPlaylists.length, subItems: [] }}
+            right={{
+              main: expiringPlaylists.length,
+              sub: (
+                <div className="d-flex align-items-center justify-content-end">
+                  <span>Near Expiring</span>
+                  <OverlayTrigger overlay={<Tooltip id="near-expiring-tooltip">expiring playlist within 30days</Tooltip>}>
+                    <i
+                      className="bi bi-info-circle ms-2"
+                      aria-label="expiring playlist within 30days"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => { e.stopPropagation(); handleActivePlaylistsClickRight(); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleActivePlaylistsClickRight(); } }}
+                    />
+                  </OverlayTrigger>
                 </div>
-                <i className="bi bi-calendar-check stat-icon"></i>
-              </div>
-            </Card.Body>
-          </Card>
+              )
+            }}
+            onClickLeft={handleActivePlaylistsClickLeft}
+            onClickRight={handleActivePlaylistsClickRight}
+          />
         </Col>
+
+        <Col md={4} sm={6} className="mb-3">
+          <KpiCard
+            title="Content Library"
+            bgClass="bg-warning"
+            left={{ sub: 'Images', main: contentWithImagesCount }}
+            right={{ sub: 'Videos', main: contentWithVideosCount }}
+            onClickLeft={handleContentImagesClick}
+            onClickRight={handleContentVideosClick}
+          />
+        </Col>
+      
       </Row>
 
       
@@ -387,7 +458,7 @@ function Dashboard() {
       {/* Dashboard Graphs */}
       <Row className="mb-4">
         <Col md={6} className="mb-3">
-          <Card style={{ cursor: 'pointer' }}>
+          <Card style={{ cursor: 'pointer' }} onClick={handleBarClick}>
             <Card.Header className="bg-white">
               <h5 className="mb-0">
                 <i className="bi bi-pie-chart me-2"></i>
@@ -396,25 +467,8 @@ function Dashboard() {
             </Card.Header>
             <Card.Body>
               <Pie
-                data={{
-                  labels: visibleStateLabels,
-                  datasets: [
-                    {
-                      data: visibleStateData,
-                      backgroundColor: [
-                        '#007bff', '#28a745', '#ffc107', '#17a2b8', '#6f42c1', '#dc3545', '#fd7e14', '#20c997'
-                      ].slice(0, visibleStateLabels.length),
-                      borderWidth: 1,
-                    },
-                  ],
-                }}
-                options={{
-                  plugins: {
-                    legend: { display: true, position: 'right', labels: { boxWidth: 12, padding: 12 } },
-                  },
-                  responsive: true,
-                  maintainAspectRatio: false,
-                }}
+                data={pieChartData}
+                options={pieChartOptions}
                 height={220}
                 ref={pieRef}
                 onClick={(event, elements) => {
@@ -444,7 +498,7 @@ function Dashboard() {
           </Card>
         </Col>
         <Col md={6} className="mb-3">
-          <Card style={{ cursor: 'pointer' }}>
+          <Card style={{ cursor: 'pointer' }} onClick={() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=5')}>
             <Card.Header className="bg-white">
               <h5 className="mb-0">
                 <i className="bi bi-bar-chart-line me-2"></i>
@@ -453,45 +507,30 @@ function Dashboard() {
             </Card.Header>
             <Card.Body>
               <Bar
-                data={{
-                  labels: Array.from({ length: 5 }, (_, i) => {
-                    const d = new Date(today);
-                    d.setDate(today.getDate() + i + 1);
-                    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                  }),
-                  datasets: [
-                    {
-                      label: 'Expiring Playlists',
-                      backgroundColor: '#ffc107',
-                      borderColor: '#ff9800',
-                      borderWidth: 1,
-                      data: Array.from({ length: 5 }, (_, i) => {
-                        const day = new Date(today);
-                        day.setDate(today.getDate() + i + 1);
-                        return approvedPlaylists.filter(p => {
-                          if (!p.endDate) return false;
-                          const end = new Date(p.endDate);
-                          return (
-                            end.getFullYear() === day.getFullYear() &&
-                            end.getMonth() === day.getMonth() &&
-                            end.getDate() === day.getDate()
-                          );
-                        }).length;
-                      }),
-                    },
-                  ],
-                }}
-                options={{
-                  plugins: {
-                    legend: { display: false },
-                  },
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0 } },
-                  },
-                }}
+                data={barChartData}
+                options={barChartOptions}
                 height={220}
+                onClick={(event, elements) => {
+                  try {
+                    // elements may be empty if click on chart background
+                    if (!elements || elements.length === 0) return;
+                    const idx = elements[0].index;
+                    if (typeof idx !== 'number') return;
+                    const d = new Date(today);
+                    d.setDate(today.getDate() + idx + 1);
+                    const dateStr = d.toISOString().split('T')[0];
+                    if (event && event.native && typeof event.native.stopImmediatePropagation === 'function') {
+                      event.native.stopImmediatePropagation();
+                    } else if (event && typeof event.stopPropagation === 'function') {
+                      event.stopPropagation();
+                    }
+                    // Navigate to ManagePlaylists approved tab with exact date filter
+                    navigate(`/manage-playlists?tab=approved&expiring=1&expiringDate=${encodeURIComponent(dateStr)}`);
+                  } catch (err) {
+                    // fallback to the general 5-day view
+                    navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=5');
+                  }
+                }}
               />
             </Card.Body>
           </Card>

@@ -2,6 +2,7 @@ import { getAllAssignments, deleteAssignment, bulkAddAssignments } from '../../s
 // src/pages/DeviceManagement/DeviceManagement.jsx - ENHANCED CONFIGURATOR
 
 import React, { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Row, Col, Button, Form, InputGroup, Modal, Alert, OverlayTrigger, Tooltip } from 'react-bootstrap';
 // import { useApp } from '../../context/AppContext';
 import { storeList } from '../../data/storeList';
@@ -46,6 +47,16 @@ function DeviceManagement() {
   const [storeDeviceMap, setStoreDeviceMap] = React.useState([]);
   const [assignments, setAssignments] = React.useState([]); // NEW STATE for assignments
   const [activeSubTab, setActiveSubTab] = React.useState('assign');
+  const location = useLocation();
+
+  // Sync activeSubTab with query param `sub` if present (e.g., ?sub=listView)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sub = params.get('sub');
+    if (sub) {
+      setActiveSubTab(sub);
+    }
+  }, [location.search]);
   
   // ...removed Edit Store Modal state...
   
@@ -354,13 +365,13 @@ function DeviceManagement() {
             <div></div>
             <Button variant="primary" onClick={() => setShowAddModal(true)}>
               <i className="bi bi-plus-circle me-2"></i>
-              Add New Device
+              Add Device Type
             </Button>
           </div>
           {devices.length === 0 ? (
             <Alert variant="info">
               <i className="bi bi-info-circle me-2"></i>
-              No devices registered yet. Click "Add New Device" to get started.
+              No devices registered yet. Click "Add Device Type" to get started.
             </Alert>
           ) : (
             <div className="table-responsive">
@@ -386,37 +397,14 @@ function DeviceManagement() {
                         <td className="font-monospace small">{device.name}</td>
                         <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
                         <td>
-                          <div className="d-flex gap-2 align-items-center">
-                            <Form.Check
-                              inline
-                              type="radio"
-                              id={`orient-both-${device.id}`}
-                              name={`orientation-${device.id}`}
-                              value="both"
-                              label="Both"
-                              checked={device.orientation === 'both'}
-                              disabled
-                            />
-                            <Form.Check
-                              inline
-                              type="radio"
-                              id={`orient-horizontal-${device.id}`}
-                              name={`orientation-${device.id}`}
-                              value="horizontal"
-                              label="Landscape"
-                              checked={device.orientation === 'horizontal'}
-                              disabled
-                            />
-                            <Form.Check
-                              inline
-                              type="radio"
-                              id={`orient-vertical-${device.id}`}
-                              name={`orientation-${device.id}`}
-                              value="vertical"
-                              label="Portrait"
-                              checked={device.orientation === 'vertical'}
-                              disabled
-                            />
+                          {/* Display orientation as text only (Both / Landscape / Portrait) */}
+                          <div>
+                            {(() => {
+                              const orientation = (device.orientation || 'both');
+                              if (orientation === 'horizontal') return 'Landscape';
+                              if (orientation === 'vertical') return 'Portrait';
+                              return 'Both';
+                            })()}
                           </div>
                         </td>
                         <td>
@@ -479,13 +467,13 @@ function DeviceManagement() {
       {/* Add Device Modal */}
       <Modal show={showAddModal} onHide={() => { setShowAddModal(false); setIsClone(false); }} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>{isClone ? 'Clone Device' : 'Add New Device'}</Modal.Title>
+          <Modal.Title>{isClone ? 'Clone Device' : 'Add Device Type'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
-            {/* Device Name */}
+            {/* Device Type */}
             <Form.Group className="mb-3">
-              <Form.Label>Device Name *</Form.Label>
+              <Form.Label>Device Type *</Form.Label>
               <Form.Control
                 type="text"
                 placeholder="e.g., Samsung 4k display"
@@ -496,7 +484,7 @@ function DeviceManagement() {
 
             {/* Orientation */}
             <Form.Group className="mb-3">
-              <Form.Label>Screen Orientation *</Form.Label>
+              <Form.Label>Possible Screen Orientation *</Form.Label>
               <div>
                 <Form.Check
                   type="radio"
@@ -504,7 +492,7 @@ function DeviceManagement() {
                   label={
                     <>
                       <i className="bi bi-arrows-angle-expand me-2"></i>
-                      Both (Recommended)
+                      Both 
                     </>
                   }
                   value="both"
@@ -630,15 +618,7 @@ function DeviceManagement() {
               </div>
             </Form.Group>
 
-            {/* Preview */}
-            <Alert variant="secondary">
-              <strong>Current Configuration:</strong>
-              <div className="mt-2">
-                <div><i className="bi bi-display me-2"></i>Name: {newDeviceName}</div>
-                <div><i className="bi bi-aspect-ratio me-2"></i>Resolution: {newDeviceResolutionWidth} × {newDeviceResolutionHeight}</div>
-                <div><i className="bi bi-arrows-angle-expand me-2"></i>Orientation: {newDeviceOrientation === 'both' ? 'Both' : newDeviceOrientation}</div>
-              </div>
-            </Alert>
+      
           </Form>
         </Modal.Body>
         <Modal.Footer>
@@ -708,7 +688,7 @@ function DeviceManagement() {
                   label={
                     <>
                       <i className="bi bi-arrows-angle-expand me-2"></i>
-                      Both (Recommended)
+                      Both 
                     </>
                   }
                   value="both"

@@ -34,17 +34,47 @@ function AssignContent() {
         // Check for expiring param in URL; allow passing days via expiringDays param
             const [expiringOnly, setExpiringOnly] = useState(false);
             const [expiringDays, setExpiringDays] = useState(5);
+            const [expiringDate, setExpiringDate] = useState(null);
             const location = useLocation();
             React.useEffect(() => {
                 const params = new URLSearchParams(location.search);
+                // Honor explicit `tab` query param first so callers can set the active tab
+                const tabParam = params.get('tab');
+                if (tabParam) {
+                    const allowed = new Set(['list', 'approved', 'rejected', 'inactive']);
+                    if (allowed.has(tabParam)) setActiveTab(tabParam);
+                }
+                // If expiringDate is present, prefer it over expiringDays in filters
+                const expiringDateParam = params.get('expiringDate');
+                if (expiringDateParam) {
+                    // accept YYYY-MM-DD or ISO date
+                    const parsed = new Date(expiringDateParam);
+                    if (!isNaN(parsed.getTime())) {
+                        setExpiringOnly(true);
+                        setExpiringDays(0); // not used when expiringDate is present
+                        setExpiringDate(expiringDateParam);
+                        if (!tabParam) setActiveTab('approved');
+                    }
+                } else {
+                    setExpiringDate(null);
+                }
+                // tabParam already handled above
                 if (params.get('expiring') === '1') {
                     setExpiringOnly(true);
-                    setActiveTab('approved');
+                    // If no explicit tab param, prefer the approved tab when showing expiring
+                    if (!tabParam) setActiveTab('approved');
                 } else {
                     setExpiringOnly(false);
                 }
                 const days = parseInt(params.get('expiringDays'), 10);
-                if (!isNaN(days) && days > 0) setExpiringDays(days);
+                if (!expiringDateParam && !isNaN(days) && days > 0) setExpiringDays(days);
+                const filter = params.get('filter');
+                if (filter === 'videoOnly' || filter === 'imageOnly') {
+                    setContentFilter(filter);
+                    if (!tabParam) setActiveTab('approved');
+                } else {
+                    setContentFilter(null);
+                }
             }, [location.search]);
             // Load playlists from IndexedDB on mount
             React.useEffect(() => {
@@ -60,6 +90,7 @@ function AssignContent() {
         const [contentList, setContentList] = useState([]);
     // All hooks and state at the top
     const [activeTab, setActiveTab] = useState('list');
+    const [contentFilter, setContentFilter] = useState(null); // 'videoOnly' | 'imageOnly' or null
 
     const [addedRows, setAddedRows] = useState([]);
     const [inactiveRows, setInactiveRows] = useState([]);
@@ -132,6 +163,28 @@ function AssignContent() {
         return row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1);
     }
 
+    function _findContentById(id) {
+        if (!id) return null;
+        const key = String(id);
+        return contentList.find(c => String(c.id || c.contentId || c.name) === key);
+    }
+
+    function isVideoOnlyPlaylist(row) {
+        if (!row || !Array.isArray(row.selectedContent) || row.selectedContent.length === 0) return false;
+        return row.selectedContent.every(cid => {
+            const c = _findContentById(cid);
+            return c && c.type === 'video';
+        });
+    }
+
+    function isImageOnlyPlaylist(row) {
+        if (!row || !Array.isArray(row.selectedContent) || row.selectedContent.length === 0) return false;
+        return row.selectedContent.every(cid => {
+            const c = _findContentById(cid);
+            return c && c.type === 'image';
+        });
+    }
+
     return (
         <div className="assign-content-page">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -161,6 +214,11 @@ function AssignContent() {
                            {addedRows.filter(row => {
                                const q = searchList.toLowerCase();
                                if (expiringOnly) {
+                                   if (expiringDate) {
+                                       if (!row.endDate) return false;
+                                       const end = new Date(row.endDate).toISOString().split('T')[0];
+                                       return end === expiringDate;
+                                   }
                                    return isExpiring(row);
                                }
                                if (!q) return true;
@@ -269,7 +327,14 @@ function AssignContent() {
                        <div className="p-3">
                                {expiringOnly && (
                                    <div className="mb-3">
-                                       <Alert variant="info">Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s). <Button variant="link" className="p-0" onClick={() => { setExpiringOnly(false); navigate('/manage-playlists'); }}>Clear</Button></Alert>
+                                       <Alert variant="info">
+                                           {expiringDate ? (
+                                               <span>Showing approved playlists expiring on <strong>{new Date(expiringDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong>.</span>
+                                           ) : (
+                                               <span>Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s).</span>
+                                           )}
+                                           &nbsp; <Button variant="link" className="p-0" onClick={() => { setExpiringOnly(false); setExpiringDate(null); navigate('/manage-playlists'); }}>Clear</Button>
+                                       </Alert>
                                    </div>
                                )}
                            <div className="mb-2">
@@ -282,9 +347,16 @@ function AssignContent() {
                                    style={{ maxWidth: 320, display: 'inline-block' }}
                                />
                            </div>
-                           {approvedRows.filter(row => {
+                               {approvedRows.filter(row => {
                                const q = searchApproved.toLowerCase();
-                               if (expiringOnly) return isExpiring(row);
+                               if (expiringOnly) {
+                                   if (expiringDate) {
+                                       if (!row.endDate) return false;
+                                       const end = new Date(row.endDate).toISOString().split('T')[0];
+                                       return end === expiringDate;
+                                   }
+                                   return isExpiring(row);
+                               }
                                if (!q) return true;
                                                        return (
                                                            (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
@@ -317,8 +389,15 @@ function AssignContent() {
                                            {approvedRows
                                                .filter(row => !row.inactive)
                                                .filter(row => {
-                                                   // If expiringOnly, only show playlists expiring in configured days
-                                                   if (expiringOnly) return isExpiring(row);
+                                                   // If expiringOnly, only show playlists expiring in configured days or on a specific date
+                                                   if (expiringOnly) {
+                                                       if (expiringDate) {
+                                                           if (!row.endDate) return false;
+                                                           const end = new Date(row.endDate).toISOString().split('T')[0];
+                                                           return end === expiringDate;
+                                                       }
+                                                       return isExpiring(row);
+                                                   }
                                                    return true;
                                                })
                                                .filter(row => {
@@ -332,6 +411,12 @@ function AssignContent() {
                                                        (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
                                                        (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
                                                    );
+                                               })
+                                               .filter(row => {
+                                                   if (!contentFilter) return true;
+                                                   if (contentFilter === 'videoOnly') return isVideoOnlyPlaylist(row);
+                                                   if (contentFilter === 'imageOnly') return isImageOnlyPlaylist(row);
+                                                   return true;
                                                })
                                                .map((row, idx) => (
                                                <tr key={row.id || idx} style={(row.inactive || row.disabledWhileEditing || row.pendingDraftId) ? { opacity: 0.6, background: '#f8d7da' } : {}}>

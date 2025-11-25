@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert } from 'react-bootstrap';
 import Select from 'react-select';
 import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
@@ -8,6 +9,8 @@ import { getAllDevices } from '../../services/deviceIndexeddb';
 
 function ContentLibrary() {
   const [contentList, setContentList] = useState([]);
+  const location = useLocation();
+  const [contentFilter, setContentFilter] = useState(null); // 'hasImages' | 'hasVideos' | null
   const [activeTab, setActiveTab] = useState('active');
   const [editContent, setEditContent] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -57,6 +60,13 @@ function ContentLibrary() {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const filter = params.get('filter');
+    if (filter === 'hasImages' || filter === 'hasVideos') setContentFilter(filter);
+    else setContentFilter(null);
+  }, [location.search]);
 
   // Load device resolutions from actual devices in localStorage
   
@@ -327,11 +337,18 @@ function ContentLibrary() {
     }
   }, [editNewFiles, showEditModal]);
 
-  // Filter by active/inactive
-  const filteredContent = contentList.filter(content => {
-    if (activeTab === 'active') return content.active !== false;
-    return content.active === false;
-  });
+  // Filter by active/inactive, and the optional content filter from query params
+  const filteredContent = contentList
+    .filter(content => {
+      if (activeTab === 'active') return content.active !== false;
+      return content.active === false;
+    })
+    .filter(content => {
+      if (!contentFilter) return true;
+      if (contentFilter === 'hasImages') return (content.type === 'image') || (Array.isArray(content.slides) && content.slides.some(s => s.type === 'image'));
+      if (contentFilter === 'hasVideos') return (content.type === 'video') || (Array.isArray(content.slides) && content.slides.some(s => s.type === 'video'));
+      return true;
+    });
 
   // Add Content modal handlers
   const openAddModal = () => {
