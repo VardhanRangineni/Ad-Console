@@ -846,14 +846,15 @@ function ContentLibrary() {
                           <>
                             <div className="text-muted small mb-1">{editSelectedProductOptions.length} {editSelectedProductOptions.length === 1 ? 'product' : 'products'}</div>
                             <Select
-                            isMulti
-                            isSearchable={false}
-                            menuIsOpen={false}
-                            options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                            value={editSelectedProductOptions}
-                            onChange={handleEditProductsChange}
-                            placeholder="Select products..."
-                            classNamePrefix="react-select"
+                              isMulti
+                              isSearchable={false}
+                              menuIsOpen={false}
+                              options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                              value={editSelectedProductOptions}
+                              onChange={handleEditProductsChange}
+                              placeholder="Select products..."
+                              classNamePrefix="react-select"
+                              components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
                               />
                               </>
                             )}
@@ -1097,15 +1098,16 @@ function ContentLibrary() {
                       <>
                         <div className="text-muted small mb-1">{selectedProductOptions.length} {selectedProductOptions.length === 1 ? 'product' : 'products'}</div>
                         <Select
-                        isMulti
-                        isSearchable={false}
-                        menuIsOpen={false}
-                        options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                        value={selectedProductOptions}
-                        onChange={opts => setSelectedProductOptions(opts || [])}
-                        placeholder=""
-                        classNamePrefix="react-select"
-                      />
+                          isMulti
+                          isSearchable={false}
+                          menuIsOpen={false}
+                          options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                          value={selectedProductOptions}
+                          onChange={opts => setSelectedProductOptions(opts || [])}
+                          placeholder=""
+                          classNamePrefix="react-select"
+                          components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
+                        />
                       </>
                     )}
                   </div>

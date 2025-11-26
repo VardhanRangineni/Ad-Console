@@ -162,6 +162,20 @@ function AssignContent() {
         return `${day}-${mon}-${year}`;
     }
 
+    function formatDateTime(dt) {
+        if (!dt) return '-';
+        const d = new Date(dt);
+        if (isNaN(d.getTime())) return '-';
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const day = pad(d.getDate());
+        const mon = months[d.getMonth()];
+        const year = String(d.getFullYear()).slice(-2);
+        const hour = pad(d.getHours());
+        const min = pad(d.getMinutes());
+        return `${day}-${mon}-${year}, ${hour}:${min}`;
+    }
+
     function generateCreatorId(item, idx) {
         // Similar deterministic generator to DeviceManagement; fallback if no createdBy is present
         let base = String(item?.id || `ITEM${idx}`).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -273,8 +287,10 @@ function AssignContent() {
                                             <th>Type</th>
                                             <th>Trigger Type</th>
                                             <th>Contents</th>
-                                            <th>Created on</th>
+                                            <th>From Date</th>
+                                            <th>End Date</th>
                                             <th>Created by</th>
+                                            <th>Created on</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
@@ -302,15 +318,13 @@ function AssignContent() {
                                                                 <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                                 <td>{getTriggerTypeLabel(row)}</td>
                                                                 <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                                <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                                <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                                <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
                                                                 <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                                <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
                                                 <td>
                                                        {(!row.status || row.status === 'pending') ? (
                                                            <>
-                                                               <Button size="sm" variant="primary" className="me-2" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'edit' } });
-                                                               }}>Edit</Button>
-                                                                  {/* Draft badge removed per request - drafts are still present but we don't show 'Draft for' in Created list */}
                                                                <Button size="sm" variant="success" className="ms-2" onClick={async () => {
                                                                    const now = new Date().toISOString();
                                                                    await updatePlaylistInDB(row.id, { status: 'approved', approvedAt: now });
@@ -340,7 +354,7 @@ function AssignContent() {
                                                                }}>Reject</Button>
                                                            </>
                                                        ) : (
-                                                           <Button size="sm" variant="outline-secondary" disabled>Edit</Button>
+                                                           <Button size="sm" variant="outline-primary" onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>View</Button>
                                                        )}
                                                 </td>
                                             </tr>
@@ -475,25 +489,35 @@ function AssignContent() {
                                                    <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
                                                    <td className="font-monospace small">{row.approvedBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.approvedAt ? formatDateShort(row.approvedAt) : '-'}</td>
+                                                   <td>{row.approvedAt ? formatDateTime(row.approvedAt) : '-'}</td>
                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
                                                    <td>
                                                        {row.inactive ? (
-                                                           <span className="badge bg-danger">Disabled</span>
+                                                           <>
+                                                               <span className="badge bg-danger">Disabled</span>
+                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                               }}>Clone</Button>
+                                                           </>
                                                        ) : row.pendingDraftId || row.disabledWhileEditing ? (
                                                            <>
                                                                <span className="badge bg-secondary">Pending Update</span>
                                                                <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
                                                                    navigate('/assign', { state: { playlist: row, action: 'view' } });
                                                                }}>View</Button>
+                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                               }}>Clone</Button>
                                                            </>
                                                        ) : (
                                                            <>
                                                                <Button size="sm" variant="primary" className="me-2" onClick={() => {
                                                                    navigate('/assign', { state: { playlist: row, action: 'edit' } });
                                                                }}>Edit</Button>
-
+                                                               <Button size="sm" variant="outline-primary" onClick={() => {
+                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                               }}>Clone</Button>
                                                            </>
                                                        )}
                                                    </td>
@@ -564,10 +588,10 @@ function AssignContent() {
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
                                                    
                                                    <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.rejectedAt ? formatDateShort(row.rejectedAt) : '-'}</td>
+                                                   <td>{row.rejectedAt ? formatDateTime(row.rejectedAt) : '-'}</td>
                                                    
                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
                                                    <td>
                                                        <Button size="sm" variant="outline-primary" onClick={() => {
                                                            navigate('/assign', { state: { playlist: row, action: 'clone' } });
@@ -639,7 +663,7 @@ function AssignContent() {
                                                     <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
                                                     <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
                                                     <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
-                                                    <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                    <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
                                                     <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                     <td>
                                                         <Button size="sm" variant="outline-primary" onClick={() => {

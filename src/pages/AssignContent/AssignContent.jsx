@@ -274,8 +274,7 @@ function AssignContent() {
 	const [storeIdInput, setStoreIdInput] = useState([]);
 		const [storeIdInputText, setStoreIdInputText] = useState('');
 		const [invalidStoreIds, setInvalidStoreIds] = useState([]);
-		const [showStoreIdsAddAlert, setShowStoreIdsAddAlert] = useState(false);
-		const [addedStoreIdsCount, setAddedStoreIdsCount] = useState(0);
+        
 
 	// Removed unused addedRows, inactiveRows, approvedRows, rejectedRows
 	const [showAddAlert, setShowAddAlert] = useState(false);
@@ -605,39 +604,7 @@ function AssignContent() {
 							{territoryType === 'store' && (
 								<>
 									{/* Show store selection directly for 'store' territory: no state/city selectors */}
-									<Form.Group className="mb-3" style={{ position: 'relative' }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Select Stores</Form.Label>
-										<AsyncSelect
-											isMulti
-											cacheOptions
-											defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-											loadOptions={loadFilteredStoreOptions}
-											value={storeOptions.filter(opt => filteredStoreIds.map(normalizeStoreId).includes(normalizeStoreId(opt.id))).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
-											onChange={selected => {
-												const ids = selected ? selected.map(opt => normalizeStoreId(opt.value)) : [];
-												// Only update the filtered store ids; do not populate the storeIdInput tags
-												setFilteredStoreIds(ids);
-											}}
-											placeholder="Select stores..."
-											classNamePrefix="react-select"
-											menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-											styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
-											isDisabled={isReadOnly}
-										/>
-									</Form.Group>
-
-										<div className="d-flex justify-content-center my-2" style={{ width: '100%' }}>
-											<div
-												role="separator"
-												aria-label="or"
-												className="rounded-circle d-flex align-items-center justify-content-center bg-danger text-white"
-												style={{ width: 40, height: 40, fontWeight: 700 }}
-											>
-												OR
-											</div>
-										</div>
-
-										<Form.Group className="mb-3" style={{ position: 'relative' }}>
+								<Form.Group className="mb-3" style={{ position: 'relative' }}>
 										<Form.Label style={{ fontWeight: 'bold' }}>Store IDs by Comma Seperated</Form.Label>
 										<Form.Control
 											type="text"
@@ -669,9 +636,6 @@ function AssignContent() {
 													const toAddPresent = present.filter(id => !existingSet.has(id));
 													if (toAddPresent.length > 0) {
 														setFilteredStoreIds(prev => Array.from(new Set([...(prev || []), ...toAddPresent])));
-														setAddedStoreIdsCount(toAddPresent.length);
-														setShowStoreIdsAddAlert(true);
-														setTimeout(() => setShowStoreIdsAddAlert(false), 1500);
 													}
 													setStoreIdInputText('');
 												}
@@ -680,12 +644,40 @@ function AssignContent() {
 											disabled={isReadOnly}
 										/>
 										<Form.Text className="text-muted">Tip: Type comma-separated store IDs and press <kbd>Enter</kbd> to add valid IDs to the filtered selection.</Form.Text>
-										{showStoreIdsAddAlert && (
-											<Alert variant="success" className="mt-2 py-1">Added {addedStoreIdsCount} store ID(s)</Alert>
-										)}
 										{invalidStoreIds.length > 0 && (
 											<Alert variant="danger" className="mt-2 py-1">Invalid store ID(s): {invalidStoreIds.join(', ')}</Alert>
 										)}
+									</Form.Group>
+
+
+									<Form.Group className="mb-3" style={{ position: 'relative' }}>
+										{((filteredStoreIds && filteredStoreIds.length > 0) || (storeIdInput && storeIdInput.length > 0)) && (
+											<div className="mb-2 small text-muted">{((filteredStoreIds || []).length + (storeIdInput || []).length)} {((filteredStoreIds || []).length + (storeIdInput || []).length) === 1 ? 'store' : 'stores'}</div>
+										)}
+										{((filteredStoreIds && filteredStoreIds.length > 0) || (storeIdInput && storeIdInput.length > 0)) ? (
+											<AsyncSelect
+											isMulti
+											cacheOptions
+											defaultOptions={storeOptions.slice(0, 100).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+											loadOptions={loadFilteredStoreOptions}
+											value={storeOptions.filter(opt => filteredStoreIds.map(normalizeStoreId).includes(normalizeStoreId(opt.id))).map(store => ({ value: store.id, label: `${store.name} (${store.id})` }))}
+											onChange={selected => {
+												const ids = selected ? selected.map(opt => normalizeStoreId(opt.value)) : [];
+												// Only update the filtered store ids; do not populate the storeIdInput tags
+												setFilteredStoreIds(ids);
+											}}
+											placeholder="Selected stores"
+											classNamePrefix="react-select"
+											// Disable search and menu/dropdown so users cannot open the options; selection should be managed via Store IDs input
+											isSearchable={false}
+											menuIsOpen={false}
+											// Hide the dropdown arrow and separator UI
+											components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
+											menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+											styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
+											isDisabled={isReadOnly}
+											/>
+										) : null}
 									</Form.Group>
 								</>
 							)}
@@ -706,6 +698,7 @@ function AssignContent() {
 										}}
 										style={{ cursor: 'pointer' }}
 										onClick={e => e.target.showPicker && e.target.showPicker()}
+										disabled={isReadOnly}
 									/>
 								</Form.Group>
 							</div>
@@ -1000,12 +993,7 @@ function AssignContent() {
 										}}
 										disabled={!selectedContent || isReadOnly}
 									/>
-									{(() => {
-										const ctmp = selectedContent ? contentList.find(c => String(c.id) === String(selectedContent)) : null;
-										const hasVideoTmp = ctmp && (ctmp.type === 'video' || (Array.isArray(ctmp.slides) && ctmp.slides.some(s => s.type === 'video')));
-										const maxTmp = hasVideoTmp && ctmp && ctmp.duration ? Math.round(ctmp.duration) : null;
-										return hasVideoTmp && maxTmp ? <div className="small text-muted mt-1">Max length: {maxTmp} seconds</div> : null;
-									})()}
+									{/* Removed max length display per UX request */}
 								</Form.Group>
 							</div>
 							<div className="col-md-2">
