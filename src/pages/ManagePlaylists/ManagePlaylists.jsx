@@ -78,14 +78,37 @@ function AssignContent() {
             // Load playlists from IndexedDB on mount
             React.useEffect(() => {
                 async function loadPlaylists() {
-                    const all = await getAllPlaylistsFromDB();
-                    setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-                    setInactiveRows(all.filter(r => r.inactive));
-                    setApprovedRows(all.filter(r => r.status === 'approved'));
-                    setRejectedRows(all.filter(r => r.status === 'rejected'));
+                        const all = await getAllPlaylistsFromDB();
+                        const changed = await ensureExpiredPlaylists(all);
+                        const play = changed ? await getAllPlaylistsFromDB() : all;
+                        setAddedRows(play.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+                        setInactiveRows(play.filter(r => r.inactive));
+                        setApprovedRows(play.filter(r => r.status === 'approved'));
+                        setRejectedRows(play.filter(r => r.status === 'rejected'));
                 }
                 loadPlaylists();
             }, []);
+
+    // Periodically check for expired playlists and update DB/state automatically
+    React.useEffect(() => {
+        let mounted = true;
+        const interval = setInterval(async () => {
+            try {
+                const all = await getAllPlaylistsFromDB();
+                const changed = await ensureExpiredPlaylists(all);
+                if (changed && mounted) {
+                    const refreshed = await getAllPlaylistsFromDB();
+                    setAddedRows(refreshed.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+                    setInactiveRows(refreshed.filter(r => r.inactive));
+                    setApprovedRows(refreshed.filter(r => r.status === 'approved'));
+                    setRejectedRows(refreshed.filter(r => r.status === 'rejected'));
+                }
+            } catch (e) {
+                console.warn('Error checking expired playlists:', e);
+            }
+        }, 60 * 1000); // every 60s
+        return () => { mounted = false; clearInterval(interval); };
+    }, []);
         const [contentList, setContentList] = useState([]);
     // All hooks and state at the top
     const [activeTab, setActiveTab] = useState('list');
@@ -136,9 +159,7 @@ function AssignContent() {
         const day = pad(d.getDate());
         const mon = months[d.getMonth()];
         const year = String(d.getFullYear()).slice(-2);
-        const hours = pad(d.getHours());
-        const mins = pad(d.getMinutes());
-        return `${day}-${mon}-${year}, ${hours}:${mins}`;
+        return `${day}-${mon}-${year}`;
     }
 
     function generateCreatorId(item, idx) {
@@ -156,6 +177,28 @@ function AssignContent() {
         if (!id) return null;
         const key = String(id);
         return contentList.find(c => String(c.id || c.contentId || c.name) === key);
+    }
+
+    // Helper: mark playlists with endDate in the past as inactive
+    async function ensureExpiredPlaylists(items) {
+        if (!Array.isArray(items)) return false;
+        const now = new Date();
+        let changed = false;
+        for (const it of items) {
+            if (it && it.endDate) {
+                const end = new Date(it.endDate);
+                if (!isNaN(end.getTime()) && end < now && !it.inactive) {
+                    try {
+                        await updatePlaylistInDB(it.id, { inactive: true });
+                        changed = true;
+                    } catch (e) {
+                        // ignore individual failures but log in console for debugging
+                        console.warn('Failed to mark playlist inactive:', it.id, e);
+                    }
+                }
+            }
+        }
+        return changed;
     }
 
     function isVideoOnlyPlaylist(row) {
@@ -316,7 +359,7 @@ function AssignContent() {
                                    <div className="mb-3">
                                        <Alert variant="info">
                                            {expiringDate ? (
-                                               <span>Showing approved playlists expiring on <strong>{new Date(expiringDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong>.</span>
+                                               <span>Showing approved playlists expiring on <strong>{formatDateShort(expiringDate)}</strong>.</span>
                                            ) : (
                                                <span>Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s).</span>
                                            )}
@@ -367,10 +410,10 @@ function AssignContent() {
                                                    <th>Effective From</th>
                                                    <th>End Date</th>
                                                 <th>Contents</th>
-                                                <th>Approved on</th>
                                                 <th>Approved by</th>
-                                                <th>Created on</th>
+                                                <th>Approved on</th>
                                                 <th>Created by</th>
+                                                <th>Created on</th>
                                                 <th>Action</th>
                                                </tr>
                                        </thead>
@@ -415,26 +458,26 @@ function AssignContent() {
                                                    </td>
                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                    <td>{getTriggerTypeLabel(row)}</td>
-                                                   <td>{row.startDate || '-'}</td>
+                                                   <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
                                                    <td>{(() => {
                                                        const start = row.startDate ? new Date(row.startDate) : null;
                                                        const approved = row.approvedAt ? new Date(row.approvedAt) : (row.updatedAt ? new Date(row.updatedAt) : null);
                                                        if (start && approved) {
-                                                           return start < approved ? approved.toISOString().split('T')[0] : start.toISOString().split('T')[0];
+                                                           return start < approved ? formatDateShort(approved) : formatDateShort(start);
                                                        } else if (start) {
-                                                           return start.toISOString().split('T')[0];
+                                                           return formatDateShort(start);
                                                        } else if (approved) {
-                                                           return approved.toISOString().split('T')[0];
+                                                           return formatDateShort(approved);
                                                        } else {
                                                            return '-';
                                                        }
                                                    })()}</td>
-                                                   <td>{row.endDate || '-'}</td>
+                                                   <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                   <td>{row.approvedAt ? formatDateShort(row.approvedAt) : '-'}</td>
                                                    <td className="font-monospace small">{row.approvedBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   <td>{row.approvedAt ? formatDateShort(row.approvedAt) : '-'}</td>
                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
                                                    <td>
                                                        {row.inactive ? (
                                                            <span className="badge bg-danger">Disabled</span>
@@ -486,11 +529,12 @@ function AssignContent() {
                                             <th>Type</th>
                                             <th>Trigger Type</th>
                                             <th>From Date</th>
-                                            <th>Rejected on</th>
-                                            <th>Rejected by</th>
                                             <th>Contents</th>
-                                            <th>Created on</th>
+                                            <th>Rejected by</th>
+                                            <th>Rejected on</th>
                                             <th>Created by</th>
+                                            <th>Created on</th>
+                                            
                                             <th>Action</th>
                                         </tr>
                                     </thead>
@@ -516,12 +560,14 @@ function AssignContent() {
                                                    </td>
                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                    <td>{getTriggerTypeLabel(row)}</td>
-                                                   <td>{row.startDate || '-'}</td>
-                                                   <td>{row.rejectedAt ? formatDateShort(row.rejectedAt) : '-'}</td>
-                                                   <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
+                                                   <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   
+                                                   <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
+                                                   <td>{row.rejectedAt ? formatDateShort(row.rejectedAt) : '-'}</td>
+                                                   
                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
                                                    <td>
                                                        <Button size="sm" variant="outline-primary" onClick={() => {
                                                            navigate('/assign', { state: { playlist: row, action: 'clone' } });
@@ -543,7 +589,7 @@ function AssignContent() {
                                <input
                                    type="text"
                                    className="form-control"
-                                   placeholder="Search by name, region, or store..."
+                                   placeholder="Search by name or type..."
                                    value={searchInactive}
                                    onChange={e => setSearchInactive(e.target.value)}
                                    style={{ maxWidth: 320, display: 'inline-block' }}
@@ -554,47 +600,35 @@ function AssignContent() {
                                if (!q) return true;
                                return (
                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                                   (row.type && String(row.type).toLowerCase().includes(q))
                                );
                            }).length > 0 ? (
                                <div>
                                    <div style={{ overflowX: 'auto' }}>
                                        <table className="table table-bordered table-sm align-middle">
                                         <thead>
-                                                    <tr>
-                                                        <th>Playlist Name</th>
-                                                        <th>Type</th>
-                                                        <th>Trigger Type</th>
-                                                        <th>State</th>
-                                                        <th>City</th>
-                                                        <th>Stores</th>
-                                                        <th>Contents</th>
-                                                        <th>From Date</th>
-                                                        <th>End Date</th>
-                                                        <th>Created on</th>
-                                                        <th>Created by</th>
-                                                        <th>Action</th>
-                                                    </tr>
+                                                                    <tr>
+                                                                        <th>Playlist Name</th>
+                                                                        <th>Type</th>
+                                                                        <th>Trigger Type</th>
+                                                                        <th>Contents</th>
+                                                                        <th>From Date</th>
+                                                                        <th>End Date</th>
+                                                                        <th>Created by</th>
+                                                                        <th>Created on</th>
+                                                                        <th>Action</th>
+                                                                    </tr>
                                         </thead>
                                         <tbody>
                                                {inactiveRows
                                                    .filter(row => {
-                                                       const q = searchInactive.toLowerCase();
-                                                       if (!q) return true;
-                                                       return (
-                                                           (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                           (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                                           (row.type && String(row.type).toLowerCase().includes(q)) ||
-                                                           (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                                           (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                                           (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                                           (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                                                       );
-                                                   })
+                                                           const q = searchInactive.toLowerCase();
+                                                           if (!q) return true;
+                                                           return (
+                                                               (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                               (row.type && String(row.type).toLowerCase().includes(q))
+                                                           );
+                                                       })
                                                    .map((row, idx) => (
                                                    <tr key={idx}>
                                                        <td>
@@ -602,29 +636,9 @@ function AssignContent() {
                                                        </td>
                                                                          <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
                                                                      <td>{getTriggerTypeLabel(row)}</td>
-                                                                     <td>{row.selectedState || '-'}</td>
-                                                    <td>{row.selectedCity || '-'}</td>
-                                                    <td>
-                                                        {row.filteredStoreIds && row.filteredStoreIds.length > 0 && (
-                                                            <>
-                                                                <div><b>Filtered:</b> {row.filteredStoreIds.join(', ')}</div>
-                                                            </>
-                                                        )}
-                                                        {row.storeIdInput && row.storeIdInput.length > 0 && (
-                                                            <>
-                                                                <div><b>IDs:</b> {row.storeIdInput.join(', ')}</div>
-                                                            </>
-                                                        )}
-                                                        {(!row.filteredStoreIds || row.filteredStoreIds.length === 0) && (!row.storeIdInput || row.storeIdInput.length === 0) && '-'}
-                                                    </td>
-                                                    <td>{row.selectedContent
-                                                        ? row.selectedContent.map(cid => {
-                                                            const c = contentList.find(mc => String(mc.id) === String(cid));
-                                                            return c ? c.title : cid;
-                                                        }).join(', ')
-                                                        : '-'}</td>
-                                                    <td>{row.startDate || '-'}</td>
-                                                    <td>{row.endDate || '-'}</td>
+                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                    <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                    <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
                                                     <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
                                                     <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                     <td>
