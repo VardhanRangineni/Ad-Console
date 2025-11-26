@@ -64,7 +64,7 @@ function KpiCard({ title, left = {}, right = {}, bgClass = 'bg-light', onClickLe
             const onlyRight = right.subItems && !left.subItems;
             const alignClass = centerBottom || (onlyLeft || onlyRight) ? 'kpi-bottom-centered' : '';
             return (
-              <div className={`d-flex justify-content-between kpi-bottom ${alignClass} align-items-center `}>
+              <div className={`d-flex justify-content-between  kpi-bottom ${alignClass} align-items-center `}>
               <div className="kpi-bottom-left d-flex align-items-center">
                 {left.subItems && left.subItems.map((s, idx) => (
                   <div key={`l-${idx}`} className="me-3">{s}</div>

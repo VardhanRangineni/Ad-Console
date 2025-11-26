@@ -44,7 +44,7 @@
 
 /* Make sure the main number and right number align and don't exceed available space */
 .kpi-left-main, .kpi-right-main { display: flex; align-items: center; gap: 0.5rem; min-width: 64px; flex-wrap: nowrap; cursor: pointer; }
-.kpi-card { height: 170px !important; }
+.kpi-card { height: 180px !important; }
 .kpi-card .kpi-body { height: calc(100% - 0px) !important; }
 .kpi-card .kpi-body { display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
 .kpi-card { overflow: hidden; }
