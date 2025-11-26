@@ -38,7 +38,7 @@ function KpiCard({ title, left = {}, right = {}, bgClass = 'bg-light', onClickLe
             ) : null}
           </div>
           {/* Title only: do not render subtitle/label row; displays only the `title` text */}
-          <div className="d-flex justify-content-between align-items-center mt-2 kpi-main-row">
+          <div className="d-flex justify-content-between align-items-center mb-2 kpi-main-row">
             <div className="kpi-left">
               <div className="kpi-left-main d-flex align-items-center" onClick={(e) => { e.stopPropagation(); if (onClickLeft) onClickLeft(e); }} role={onClickLeft ? 'button' : undefined} tabIndex={0} aria-label={left && left.sub ? String(left.sub) : 'left kpi'}>
                 <div className="kpi-num-wrapper">

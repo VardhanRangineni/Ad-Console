@@ -417,7 +417,7 @@ function Dashboard() {
             title="Active Playlists"
             bgClass="bg-info"
             left={{ sub: '', main: approvedPlaylists.length, subItems: [] }}
-            right={{ main: expiringPlaylists.length, header: 'Near Expiring', info: 'Expiring in 30 days' }}
+            right={{ main: expiringPlaylists.length, header: 'Near Expiring', info: 'Expiring in 10 days' }}
             onClickLeft={handleActivePlaylistsClickLeft}
             onClickRight={handleActivePlaylistsClickRight}
           />
@@ -448,7 +448,7 @@ function Dashboard() {
             <Card.Header className="bg-white">
               <h5 className="mb-0">
                 <i className="bi bi-pie-chart me-2"></i>
-                Devices by State
+                  Assigned Devices per State
               </h5>
             </Card.Header>
             <Card.Body>
