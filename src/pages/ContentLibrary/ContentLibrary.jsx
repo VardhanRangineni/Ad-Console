@@ -154,12 +154,44 @@ function ContentLibrary() {
     setEditProductInputError('');
   };
 
+  const handleSaveEdit = async () => {
+    if (!editContent) return;
+    try {
+      await updateContent(editContent);
+      const all = await getAllContent();
+      setContentList(all);
+      setShowEditModal(false);
+      setEditContent(null);
+      setEditError('');
+    } catch (err) {
+      console.error('Error saving edited content', err);
+      setEditError('Failed to save changes. Please try again.');
+    }
+  };
+
   // Handle adding new images/videos in edit modal
   const handleEditAddFiles = (e) => {
     const files = Array.from(e.target.files);
     const images = files.filter(f => f.type.startsWith('image/'));
     const videos = files.filter(f => f.type.startsWith('video/'));
-    // Check if existing slides are all images or all videos
+    // Determine edit content top-level type (treat 'slideshow' as image)
+    const editType = editContent && typeof editContent.type === 'string' ? editContent.type.toLowerCase() : null;
+    const editIsVideo = editType === 'video';
+    const editIsImage = editType === 'image' || editType === 'slideshow';
+
+    // Enforce that Edit upload matches the content's type if it's specified
+    if (editIsVideo && videos.length !== files.length) {
+      setEditMediaTypeError('Please upload only videos for this Video content.');
+      setEditNewFiles([]);
+      return;
+    }
+    if (editIsImage && images.length !== files.length) {
+      setEditMediaTypeError('Please upload only images for this Image content.');
+      setEditNewFiles([]);
+      return;
+    }
+
+    // Existing logic: check mixture with existing slides
     const existingSlides = (editContent && editContent.slides) ? editContent.slides : [];
     const hasExistingImages = existingSlides.some(s => s.type === 'image');
     const hasExistingVideos = existingSlides.some(s => s.type === 'video');
@@ -168,13 +200,16 @@ function ContentLibrary() {
       setEditNewFiles([]);
       return;
     }
+
+    // If both types are present in the selected files, block
     if (images.length > 0 && videos.length > 0) {
       setEditMediaTypeError('You can only upload images or videos, not both.');
       setEditNewFiles([]);
-    } else {
-      setEditMediaTypeError('');
-      setEditNewFiles(files);
+      return;
     }
+
+    setEditMediaTypeError('');
+    setEditNewFiles(files);
   };
 
   const handleEditSaveFiles = async () => {
@@ -666,10 +701,16 @@ function ContentLibrary() {
                   ))}
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Add More Images or Videos</label>
-                  <input type="file" accept="image/*,video/*" multiple onChange={handleEditAddFiles} className="form-control" />
+                  <label className="form-label fw-bold">Add More {editContent && (editContent.type === 'video' ? 'Videos' : 'Images')}</label>
+                  <input
+                    type="file"
+                    accept={editContent && (editContent.type === 'video' ? 'video/*' : 'image/*')}
+                    multiple
+                    onChange={handleEditAddFiles}
+                    className="form-control"
+                  />
                   <div className="text-muted" style={{ fontSize: '0.95em' }}>
-                    You can select multiple images or multiple videos, but not both at the same time.
+                    You can select multiple {editContent && (editContent.type === 'video' ? 'videos' : 'images')} (only the content type is accepted).
                   </div>
                   {editMediaTypeError && <div className="text-danger mt-1">{editMediaTypeError}</div>}
                   {editMediaResolutions.length > 0 && (
@@ -725,7 +766,7 @@ function ContentLibrary() {
                 {/* Product association for edit modal */}
                 <div className="mb-3">
                   <Form.Group>
-                    <Form.Label>Associated Products</Form.Label>
+                    <Form.Label className="fw-bold">Associated Products</Form.Label>
                     <div>
                       <div style={{ minWidth: 320 }}>
                         <Form.Control
@@ -812,6 +853,7 @@ function ContentLibrary() {
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={closeEditModal}>Close</Button>
+            <Button variant="primary" onClick={handleSaveEdit} disabled={!editContent}>Save Changes</Button>
           </Modal.Footer>
         </Modal>
 
@@ -882,7 +924,7 @@ function ContentLibrary() {
             {addError && <Alert variant="danger">{addError}</Alert>}
             <Form>
               <Form.Group className="mb-3">
-                <Form.Label>Content Name</Form.Label>
+                <Form.Label className="fw-bold">Content Name</Form.Label>
                 <Form.Control
                   type="text"
                   value={newContentName}
@@ -891,7 +933,7 @@ function ContentLibrary() {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Content Type</Form.Label>
+                <Form.Label className="fw-bold">Content Type</Form.Label>
                 <div>
                   <Form.Check
                     inline
@@ -922,7 +964,7 @@ function ContentLibrary() {
                 </div>
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Upload {newContentType === 'image' ? 'Images' : 'Videos'}</Form.Label>
+                <Form.Label className="fw-bold">Upload {newContentType === 'image' ? 'Images' : 'Videos'}</Form.Label>
                 <Form.Control
                   type="file"
                   accept={newContentType === 'image' ? 'image/*' : 'video/*'}
@@ -930,12 +972,12 @@ function ContentLibrary() {
                   onChange={handleAddMedia}
                 />
                 <Form.Text className="text-muted">
-                  You can select multiple {newContentType === 'image' ? 'images' : 'videos'} for this content type.
+                  Supported Formats {newContentType === 'image' ? '(JPG, PNG, JPEG)' : '(MP4, MOV, MKV, AVI)'}.
                 </Form.Text>
                 {mediaTypeError && <div className="text-danger mt-1">{mediaTypeError}</div>}
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Associated Products</Form.Label>
+                <Form.Label className="fw-bold">Associated Products</Form.Label>
                 <div>
                   <div style={{ minWidth: 320 }}>
                     <Form.Control
