@@ -18,12 +18,13 @@ Chart.register(ArcElement, ChartJsTooltip, Legend, CategoryScale, LinearScale, B
 function Dashboard() {
   const navigate = useNavigate();
   // Stable navigation callbacks to avoid re-creating functions on render
-  const handleAssignedDevicesClick = useCallback(() => navigate('/devices?sub=listView'), [navigate]);
+  const handleAssignedDevicesClick = useCallback(() => navigate('/settings?tab=listView'), [navigate]);
   const handleAssignedStoresClick = useCallback(() => navigate('/settings?tab=listView'), [navigate]);
   const handleActivePlaylistsClickLeft = useCallback(() => navigate('/manage-playlists?tab=approved'), [navigate]);
   const handleActivePlaylistsClickRight = useCallback(() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=30'), [navigate]);
   const handleContentImagesClick = useCallback(() => navigate('/content-library?filter=hasImages'), [navigate]);
   const handleContentVideosClick = useCallback(() => navigate('/content-library?filter=hasVideos'), [navigate]);
+  const handleTotalContentClick = useCallback(() => navigate('/content'), [navigate]);
   const handleBarClick = useCallback(() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=5'), [navigate]);
   const [playlists, setPlaylists] = useState([]);
   const [indexedDevices, setIndexedDevices] = useState(null);
@@ -431,6 +432,7 @@ function Dashboard() {
               <span key="videos" onClick={(e) => { e.stopPropagation(); handleContentVideosClick(); }} style={{ cursor: 'pointer' }}>Videos: <Badge bg="secondary">{contentWithVideosCount}</Badge></span>
             ] }}
             right={{ sub: '', main: '', header: '' }}
+            onClickLeft={handleTotalContentClick}
             centerBottom={true}
           />
         </Col>
