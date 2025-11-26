@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { Pie, Bar, getElementsAtEvent } from 'react-chartjs-2';
 import { Chart, ArcElement, Tooltip as ChartJsTooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
-import { Row, Col, Card, Badge, Modal, Button, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Modal, Button } from 'react-bootstrap';
 import KpiCard from '../../components/common/KpiCard/KpiCard';
 import { getAllDevices, getAllAssignments } from '../../services/deviceIndexeddb';
 import { storeList } from '../../data/storeList';
@@ -405,7 +405,7 @@ function Dashboard() {
                 <span key="offline">Offline: <Badge bg="danger">{loadingIndexedDevices ? (<span className="text-white-75">-</span>) : assignedOfflineCount}</Badge></span>
               ]
             }}
-            right={{ main: uniqueAssignedStoreCount, sub: 'Assigned Stores' }}
+            right={{ main: uniqueAssignedStoreCount, header: 'Stores' }}
             onClickLeft={handleAssignedDevicesClick}
             onClickRight={handleAssignedStoresClick}
           />
@@ -416,25 +416,7 @@ function Dashboard() {
             title="Active Playlists"
             bgClass="bg-info"
             left={{ sub: '', main: approvedPlaylists.length, subItems: [] }}
-            right={{
-              main: expiringPlaylists.length,
-              sub: (
-                <div className="d-flex align-items-center justify-content-end">
-                  <span>Near Expiring</span>
-                  <OverlayTrigger overlay={<Tooltip id="near-expiring-tooltip">expiring playlist within 30days</Tooltip>}>
-                    <i
-                      className="bi bi-info-circle ms-2"
-                      aria-label="expiring playlist within 30days"
-                      role="button"
-                      tabIndex={0}
-                      style={{ cursor: 'pointer' }}
-                      onClick={(e) => { e.stopPropagation(); handleActivePlaylistsClickRight(); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleActivePlaylistsClickRight(); } }}
-                    />
-                  </OverlayTrigger>
-                </div>
-              )
-            }}
+            right={{ main: expiringPlaylists.length, header: 'Near Expiring', info: 'Expiring in 30 days' }}
             onClickLeft={handleActivePlaylistsClickLeft}
             onClickRight={handleActivePlaylistsClickRight}
           />
@@ -442,12 +424,14 @@ function Dashboard() {
 
         <Col md={4} sm={6} className="mb-3">
           <KpiCard
-            title="Content Library"
+            title="Total Content"
             bgClass="bg-warning"
-            left={{ sub: 'Images', main: contentWithImagesCount }}
-            right={{ sub: 'Videos', main: contentWithVideosCount }}
-            onClickLeft={handleContentImagesClick}
-            onClickRight={handleContentVideosClick}
+            left={{ sub: '', main: activeContent.length, subItems: [
+              <span key="images" onClick={(e) => { e.stopPropagation(); handleContentImagesClick(); }} style={{ cursor: 'pointer' }}>Images: <Badge bg="primary">{contentWithImagesCount}</Badge></span>,
+              <span key="videos" onClick={(e) => { e.stopPropagation(); handleContentVideosClick(); }} style={{ cursor: 'pointer' }}>Videos: <Badge bg="secondary">{contentWithVideosCount}</Badge></span>
+            ] }}
+            right={{ sub: '', main: '', header: '' }}
+            centerBottom={true}
           />
         </Col>
       
