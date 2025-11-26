@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Tab, Button, Alert } from 'react-bootstrap';
 
 import { getAllContent, getDB } from '../../services/indexeddb';
-import { storeList } from '../../data/storeList';
 // Playlists store helpers using shared ad-console-db
 
 const PLAYLIST_STORE = 'playlists';
@@ -105,11 +104,7 @@ function AssignContent() {
         loadContent();
     }, []);
 
-    // Normalize store id for comparisons
-    function normalizeStoreId(id) {
-        if (!id) return '';
-        return String(id).trim().toUpperCase();
-    }
+    // Normalize store id for comparisons (removed as unused)
 
     // Helper: is playlist expiring in `expiringDays` days
     function isExpiring(row) {
@@ -121,46 +116,40 @@ function AssignContent() {
         return end >= today && end <= expiryFromNow;
     }
 
-    function getTerritoryDisplay(row) {
-        if (!row) return '-';
-        const type = (row.territoryType || '').toLowerCase();
-        if (type === 'country') return row.selectedCountry || 'India';
-        if (type === 'state') {
-            if (Array.isArray(row.selectedState) && row.selectedState.length) return row.selectedState.join(', ');
-            if (typeof row.selectedState === 'string' && row.selectedState) return row.selectedState;
-            return '-';
-        }
-        if (type === 'city') {
-            if (Array.isArray(row.selectedCity) && row.selectedCity.length) return row.selectedCity.join(', ');
-            if (typeof row.selectedCity === 'string' && row.selectedCity) return row.selectedCity;
-            return '-';
-        }
-        if (type === 'store') {
-            const names = [];
-            const addFromIds = (ids) => {
-                if (!ids) return;
-                if (!Array.isArray(ids)) ids = [ids];
-                ids.forEach(id => {
-                    const norm = normalizeStoreId(id);
-                    const s = storeList.find(st => normalizeStoreId(st.id) === norm);
-                    if (s) names.push(`${s.name} (${s.id})`);
-                    else names.push(id);
-                });
-            };
-            // Prefer filteredStoreIds if present, otherwise storeIdInput
-            if (row.filteredStoreIds && row.filteredStoreIds.length) addFromIds(row.filteredStoreIds);
-            if (names.length === 0 && row.storeIdInput && row.storeIdInput.length) addFromIds(row.storeIdInput);
-            if (names.length > 0) return names.join(', ');
-            if (row.regionNomenclature) return row.regionNomenclature;
-            return '-';
-        }
-        // Fallback
-        return (row.territoryType ? row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1) : '-');
+    // Territory display/label helpers removed - territory column is hidden in UI
+
+    function getTriggerTypeLabel(row) {
+        if (!row || row.type !== 'trigger') return '-';
+        const st = (row.triggerSubType || '').toLowerCase();
+        if (st === 'time') return 'Time';
+        if (st === 'customer') return 'Customer';
+        if (st === 'product') return 'Product';
+        return '-';
     }
 
-    function getTerritoryLabel(row) {
-        if (!row || !row.territoryType) return '-';
-        return row.territoryType.charAt(0).toUpperCase() + row.territoryType.slice(1);
+    function formatDateShort(dt) {
+        if (!dt) return '-';
+        const d = new Date(dt);
+        if (isNaN(d.getTime())) return '-';
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const day = pad(d.getDate());
+        const mon = months[d.getMonth()];
+        const year = String(d.getFullYear()).slice(-2);
+        const hours = pad(d.getHours());
+        const mins = pad(d.getMinutes());
+        return `${day}-${mon}-${year}, ${hours}:${mins}`;
+    }
+
+    function generateCreatorId(item, idx) {
+        // Similar deterministic generator to DeviceManagement; fallback if no createdBy is present
+        let base = String(item?.id || `ITEM${idx}`).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        let suffix = base.slice(-5);
+        if (suffix.length < 5) suffix = suffix.padStart(5, '0');
+        let sum = 0;
+        for (let i=0;i<base.length;i++) sum += base.charCodeAt(i);
+        const letter = String.fromCharCode(65 + (sum % 26));
+        return `OTG${suffix}${letter}`;
     }
 
     function _findContentById(id) {
@@ -190,7 +179,7 @@ function AssignContent() {
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="mb-0">
                     <i className="bi bi-list-task me-2"></i>
-                    Playlist Assignment
+                    Dashboard
                 </h2>
             </div>
             <Tabs
@@ -199,7 +188,7 @@ function AssignContent() {
                 onSelect={setActiveTab}
                 className="mb-3"
             >
-                <Tab eventKey="list" title="Created Playlists">
+                <Tab eventKey="list" title="Created">
                     <div className="p-3">
                            <div className="mb-2">
                                <input
@@ -238,11 +227,11 @@ function AssignContent() {
                                         <tr>
                                             <th>Playlist ID</th>
                                             <th>Playlist Name</th>
-                                            <th>Region/Territory</th>
                                             <th>Type</th>
-                                                <th>Start At</th>
-                                                <th>Stop At</th>
-                                            <th>Content Count</th>
+                                            <th>Trigger Type</th>
+                                            <th>Contents</th>
+                                            <th>Created on</th>
+                                            <th>Created by</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
@@ -267,13 +256,11 @@ function AssignContent() {
                                                 <td>
                                                     <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                 </td>
-                                                   <td>
-                                                               {getTerritoryLabel(row)}
-                                                   </td>
-                                                <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                <td>{row.triggerStartAt || '-'}</td>
-                                                <td>{row.triggerStopAt || '-'}</td>
-                                                <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                                <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
+                                                                <td>{getTriggerTypeLabel(row)}</td>
+                                                                <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                                <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                                <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                 <td>
                                                        {(!row.status || row.status === 'pending') ? (
                                                            <>
@@ -374,15 +361,17 @@ function AssignContent() {
                                                <tr>
                                                    <th>Playlist ID</th>
                                                    <th>Playlist Name</th>
-                                                   <th>Region/Territory</th>
                                                    <th>Type</th>
-                                                   <th>Start At</th>
-                                                   <th>Stop At</th>
-                                                   <th>Start Date</th>
+                                                   <th>Trigger Type</th>
+                                                <th>From Date</th>
                                                    <th>Effective From</th>
                                                    <th>End Date</th>
-                                                   <th>Content Count</th>
-                                                   <th>Action</th>
+                                                <th>Contents</th>
+                                                <th>Approved on</th>
+                                                <th>Approved by</th>
+                                                <th>Created on</th>
+                                                <th>Created by</th>
+                                                <th>Action</th>
                                                </tr>
                                        </thead>
                                        <tbody>
@@ -424,10 +413,8 @@ function AssignContent() {
                                                    <td>
                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
-                                                   <td>{getTerritoryLabel(row)}</td>
                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                   <td>{row.triggerStartAt || '-'}</td>
-                                                   <td>{row.triggerStopAt || '-'}</td>
+                                                   <td>{getTriggerTypeLabel(row)}</td>
                                                    <td>{row.startDate || '-'}</td>
                                                    <td>{(() => {
                                                        const start = row.startDate ? new Date(row.startDate) : null;
@@ -444,6 +431,10 @@ function AssignContent() {
                                                    })()}</td>
                                                    <td>{row.endDate || '-'}</td>
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                   <td>{row.approvedAt ? formatDateShort(row.approvedAt) : '-'}</td>
+                                                   <td className="font-monospace small">{row.approvedBy || generateCreatorId(row, idx)}</td>
+                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                    <td>
                                                        {row.inactive ? (
                                                            <span className="badge bg-danger">Disabled</span>
@@ -492,13 +483,14 @@ function AssignContent() {
                                         <tr>
                                             <th>Playlist ID</th>
                                             <th>Playlist Name</th>
-                                            <th>Region/Territory</th>
                                             <th>Type</th>
-                                            <th>Start At</th>
-                                            <th>Stop At</th>
-                                            <th>Start Date</th>
-                                            <th>Rejected Date</th>
-                                            <th>Content Count</th>
+                                            <th>Trigger Type</th>
+                                            <th>From Date</th>
+                                            <th>Rejected on</th>
+                                            <th>Rejected by</th>
+                                            <th>Contents</th>
+                                            <th>Created on</th>
+                                            <th>Created by</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
@@ -522,22 +514,14 @@ function AssignContent() {
                                                    <td>
                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                    </td>
-                                                   <td>{getTerritoryLabel(row)}</td>
                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                   <td>{row.triggerStartAt || '-'}</td>
-                                                   <td>{row.triggerStopAt || '-'}</td>
+                                                   <td>{getTriggerTypeLabel(row)}</td>
                                                    <td>{row.startDate || '-'}</td>
-                                                   <td>{(() => {
-                                                       // Show rejected date if present
-                                                       let dateStr = '-';
-                                                       if (row.rejectedAt && !isNaN(Date.parse(row.rejectedAt))) {
-                                                           dateStr = new Date(row.rejectedAt).toISOString().split('T')[0];
-                                                       } else if (row.updatedAt && !isNaN(Date.parse(row.updatedAt))) {
-                                                           dateStr = new Date(row.updatedAt).toISOString().split('T')[0];
-                                                       }
-                                                       return dateStr;
-                                                   })()}</td>
+                                                   <td>{row.rejectedAt ? formatDateShort(row.rejectedAt) : '-'}</td>
+                                                   <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                   <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                   <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                    <td>
                                                        <Button size="sm" variant="outline-primary" onClick={() => {
                                                            navigate('/assign', { state: { playlist: row, action: 'clone' } });
@@ -553,7 +537,7 @@ function AssignContent() {
                         )}
                     </div>
                 </Tab>
-                <Tab eventKey="inactive" title="Expired Playlists">
+                <Tab eventKey="inactive" title="Expired">
                     <div className="p-3">
                            <div className="mb-2">
                                <input
@@ -581,20 +565,20 @@ function AssignContent() {
                                    <div style={{ overflowX: 'auto' }}>
                                        <table className="table table-bordered table-sm align-middle">
                                         <thead>
-                                            <tr>
-                                                    <th>Playlist Name</th>
-                                                    <th>Territory</th>
-                                                    <th>Type</th>
-                                                    <th>Start At</th>
-                                                    <th>Stop At</th>
-                                                    <th>State</th>
-                                                    <th>City</th>
-                                                    <th>Stores</th>
-                                                    <th>Content</th>
-                                                    <th>Start Date</th>
-                                                    <th>End Date</th>
-                                                    <th>Action</th>
-                                                </tr>
+                                                    <tr>
+                                                        <th>Playlist Name</th>
+                                                        <th>Type</th>
+                                                        <th>Trigger Type</th>
+                                                        <th>State</th>
+                                                        <th>City</th>
+                                                        <th>Stores</th>
+                                                        <th>Contents</th>
+                                                        <th>From Date</th>
+                                                        <th>End Date</th>
+                                                        <th>Created on</th>
+                                                        <th>Created by</th>
+                                                        <th>Action</th>
+                                                    </tr>
                                         </thead>
                                         <tbody>
                                                {inactiveRows
@@ -616,10 +600,8 @@ function AssignContent() {
                                                        <td>
                                                            <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
                                                        </td>
-                                                       <td>{getTerritoryDisplay(row)}</td>
                                                                          <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                                     <td>{row.triggerStartAt || '-'}</td>
-                                                                     <td>{row.triggerStopAt || '-'}</td>
+                                                                     <td>{getTriggerTypeLabel(row)}</td>
                                                                      <td>{row.selectedState || '-'}</td>
                                                     <td>{row.selectedCity || '-'}</td>
                                                     <td>
@@ -643,6 +625,8 @@ function AssignContent() {
                                                         : '-'}</td>
                                                     <td>{row.startDate || '-'}</td>
                                                     <td>{row.endDate || '-'}</td>
+                                                    <td>{row.createdAt ? formatDateShort(row.createdAt) : '-'}</td>
+                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
                                                     <td>
                                                         <Button size="sm" variant="outline-primary" onClick={() => {
                                                             navigate('/assign', { state: { playlist: row, action: 'clone' } });

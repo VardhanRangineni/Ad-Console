@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert, Badge } from 'react-bootstrap';
 import Select from 'react-select';
@@ -40,6 +40,8 @@ function ContentLibrary() {
   const [editProductIdInput, setEditProductIdInput] = useState('');
   const [editSelectedProductOptions, setEditSelectedProductOptions] = useState([]);
   const [editProductInputError, setEditProductInputError] = useState('');
+  const addUploadInputRef = useRef(null);
+  const editUploadInputRef = useRef(null);
 
   const handleRemoveSlide = (idx) => {
     if (!editContent || !editContent.slides) return;
@@ -129,6 +131,7 @@ function ContentLibrary() {
     setEditContent(content);
     setShowEditModal(true);
     setEditNewFiles([]);
+    if (editUploadInputRef.current) editUploadInputRef.current.value = '';
     setEditError('');
     // Initialize edit product options from content if present
     if (content && content.products && Array.isArray(content.products)) {
@@ -152,6 +155,7 @@ function ContentLibrary() {
     setEditSelectedProductOptions([]);
     setEditProductIdInput('');
     setEditProductInputError('');
+    if (editUploadInputRef.current) editUploadInputRef.current.value = '';
   };
 
   const handleSaveEdit = async () => {
@@ -407,6 +411,7 @@ function ContentLibrary() {
     setProductIdInput('');
     setSelectedProductOptions([]);
     setNewContentType('image');
+    if (addUploadInputRef.current) addUploadInputRef.current.value = '';
   };
   const handleAddMedia = (e) => {
     const files = Array.from(e.target.files);
@@ -529,6 +534,7 @@ function ContentLibrary() {
     setMediaTypeError('');
     setSelectedProductOptions([]);
     setProductIdInput('');
+    if (addUploadInputRef.current) addUploadInputRef.current.value = '';
   };
 
   const handleEditProductsChange = async (opts) => {
@@ -707,6 +713,7 @@ function ContentLibrary() {
                     accept={editContent && (editContent.type === 'video' ? 'video/*' : 'image/*')}
                     multiple
                     onChange={handleEditAddFiles}
+                    ref={editUploadInputRef}
                     className="form-control"
                   />
                   <div className="text-muted" style={{ fontSize: '0.95em' }}>
@@ -834,17 +841,22 @@ function ContentLibrary() {
                       </div>
                     </div>
                           <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
-                    <div>
-                        <Select
-                          isMulti
-                          isSearchable={false}
-                          menuIsOpen={false}
-                          options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                          value={editSelectedProductOptions}
-                          onChange={handleEditProductsChange}
-                          placeholder="Select products..."
-                          classNamePrefix="react-select"
-                        />
+                      <div>
+                        {editSelectedProductOptions.length > 0 && (
+                          <>
+                            <div className="text-muted small mb-1">{editSelectedProductOptions.length} {editSelectedProductOptions.length === 1 ? 'product' : 'products'}</div>
+                            <Select
+                            isMulti
+                            isSearchable={false}
+                            menuIsOpen={false}
+                            options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                            value={editSelectedProductOptions}
+                            onChange={handleEditProductsChange}
+                            placeholder="Select products..."
+                            classNamePrefix="react-select"
+                              />
+                              </>
+                            )}
                       </div>
                   </Form.Group>
                 </div>
@@ -970,12 +982,61 @@ function ContentLibrary() {
                   accept={newContentType === 'image' ? 'image/*' : 'video/*'}
                   multiple
                   onChange={handleAddMedia}
+                  ref={addUploadInputRef}
                 />
                 <Form.Text className="text-muted">
                   Supported Formats {newContentType === 'image' ? '(JPG, PNG, JPEG)' : '(MP4, MOV, MKV, AVI)'}.
                 </Form.Text>
                 {mediaTypeError && <div className="text-danger mt-1">{mediaTypeError}</div>}
               </Form.Group>
+              {mediaResolutions.length > 0 && (
+                <div className="mb-3">
+                  <strong>Selected Media Resolutions:</strong>
+                  <Table bordered size="sm" className="mt-2">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Width</th>
+                        <th>Height</th>
+                        <th>Orientation</th>
+                        <th>Duration (s)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mediaResolutions.map((m, i) => (
+                        <tr key={i}>
+                          <td>
+                            {m.type === 'image' && m.dataUrl ? (
+                              <span
+                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'image' })}
+                                onMouseLeave={() => setPreviewAnchor(null)}
+                                onClick={() => setPreviewImage(m.dataUrl)}
+                              >
+                                {m.name}
+                              </span>
+                            ) : m.type === 'video' && m.dataUrl ? (
+                              <span
+                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
+                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'video' })}
+                                onMouseLeave={() => setPreviewAnchor(null)}
+                              >
+                                {m.name}
+                              </span>
+                            ) : m.name}
+                          </td>
+                          <td>{m.type}</td>
+                          <td>{m.width}</td>
+                          <td>{m.height}</td>
+                          <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
+                          <td>{m.type === 'video' && m.duration ? Math.round(m.duration) : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold">Associated Products</Form.Label>
                 <div>
@@ -1032,67 +1093,25 @@ function ContentLibrary() {
                   </div>
                                     <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
                    <div>
-                    <Select
-                      isMulti
-                      isSearchable={false}
-                      menuIsOpen={false}
-                      options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                      value={selectedProductOptions}
-                      onChange={opts => setSelectedProductOptions(opts || [])}
-                      placeholder="Select products..."
-                      classNamePrefix="react-select"
-                    />
+                    {selectedProductOptions.length > 0 && (
+                      <>
+                        <div className="text-muted small mb-1">{selectedProductOptions.length} {selectedProductOptions.length === 1 ? 'product' : 'products'}</div>
+                        <Select
+                        isMulti
+                        isSearchable={false}
+                        menuIsOpen={false}
+                        options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                        value={selectedProductOptions}
+                        onChange={opts => setSelectedProductOptions(opts || [])}
+                        placeholder=""
+                        classNamePrefix="react-select"
+                      />
+                      </>
+                    )}
                   </div>
                 </div>
               </Form.Group>
-              {mediaResolutions.length > 0 && (
-                <div className="mb-3">
-                  <strong>Selected Media Resolutions:</strong>
-                  <Table bordered size="sm" className="mt-2">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Width</th>
-                        <th>Height</th>
-                        <th>Orientation</th>
-                        <th>Duration (s)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {mediaResolutions.map((m, i) => (
-                        <tr key={i}>
-                          <td>
-                            {m.type === 'image' && m.dataUrl ? (
-                              <span
-                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
-                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'image' })}
-                                onMouseLeave={() => setPreviewAnchor(null)}
-                                onClick={() => setPreviewImage(m.dataUrl)}
-                              >
-                                {m.name}
-                              </span>
-                            ) : m.type === 'video' && m.dataUrl ? (
-                              <span
-                                style={{ textDecoration: 'underline', color: '#007bff', cursor: 'pointer', position: 'relative' }}
-                                onMouseEnter={e => setPreviewAnchor({ x: e.clientX, y: e.clientY, url: m.dataUrl, type: 'video' })}
-                                onMouseLeave={() => setPreviewAnchor(null)}
-                              >
-                                {m.name}
-                              </span>
-                            ) : m.name}
-                          </td>
-                          <td>{m.type}</td>
-                          <td>{m.width}</td>
-                          <td>{m.height}</td>
-                          <td>{typeof m.width === 'number' && typeof m.height === 'number' ? (m.width > m.height ? 'Landscape' : m.width < m.height ? 'Portrait' : 'Square') : '-'}</td>
-                          <td>{m.type === 'video' && m.duration ? Math.round(m.duration) : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                </div>
-              )}
+              
               {deviceResolutions.landscape.length === 0 && deviceResolutions.portrait.length === 0 ? (
                 <Alert variant="warning">
                   No device resolutions found.{' '}

@@ -18,7 +18,7 @@ function AsideBar() {
       label: 'Playlists',
       submenu: [
         { to: '/assign', label: 'Create' },
-        { to: '/manage-playlists', label: 'Manage' },
+        { to: '/manage-playlists', label: 'Dashboard' },
       ],
     },
     {

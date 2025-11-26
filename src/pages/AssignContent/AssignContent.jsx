@@ -457,7 +457,7 @@ function AssignContent() {
 			<div className="d-flex justify-content-between align-items-center mb-4">
 				<h2 className="mb-0">
 					<i className="bi bi-list-task me-2"></i>
-					Playlist Assignment
+					Create Playlist
 				</h2>
 			</div>
 				<div className="p-3">
@@ -695,7 +695,7 @@ function AssignContent() {
 						<div className="row mb-3">
 							<div className="col-md-6">
 								<Form.Group>
-									<Form.Label style={{ fontWeight: 'bold' }}>Start Date</Form.Label>
+									<Form.Label style={{ fontWeight: 'bold' }}>From Date</Form.Label>
 									<Form.Control
 										type="date"
 										value={startDate}
@@ -771,14 +771,13 @@ function AssignContent() {
 								{/* Insert customer & product UI directly under Trigger Type select */}
 								{triggerSubType === 'customer' && (
 									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Customer-based trigger</Form.Label>
 										<div className="mb-2 d-flex gap-3 align-items-center">
-											<Form.Check inline type="radio" id="customer-all" name="customerTriggerMode" label={<label htmlFor="customer-all" style={{ whiteSpace: 'nowrap' }}>All customers</label>} checked={customerTriggerMode === 'all'} onChange={() => setCustomerTriggerMode('all')} disabled={isReadOnly} />
-											<Form.Check inline type="radio" id="customer-specific" name="customerTriggerMode" label={<label htmlFor="customer-specific" style={{ whiteSpace: 'nowrap' }}>Few / Specific customers</label>} checked={customerTriggerMode === 'specific'} onChange={() => setCustomerTriggerMode('specific')} disabled={isReadOnly} />
+											<Form.Check inline type="radio" id="customer-all" name="customerTriggerMode" label={<label htmlFor="customer-all" style={{ whiteSpace: 'nowrap' }}>All</label>} checked={customerTriggerMode === 'all'} onChange={() => setCustomerTriggerMode('all')} disabled={isReadOnly} />
+											<Form.Check inline type="radio" id="customer-specific" name="customerTriggerMode" label={<label htmlFor="customer-specific" style={{ whiteSpace: 'nowrap' }}>Few</label>} checked={customerTriggerMode === 'specific'} onChange={() => setCustomerTriggerMode('specific')} disabled={isReadOnly} />
 										</div>
 										{customerTriggerMode === 'specific' && (
 											<div className="mb-2">
-												<Form.Label style={{ fontWeight: 600 }}>Upload CSV/Excel with customer IDs (first column)</Form.Label>
+												<Form.Label style={{ fontWeight: 300 }}>Customer Ids Upload, in .xlsx or .csv format</Form.Label>
 												<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleCustomerFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
 												{customerFileName && <div className="small mt-1">Uploaded: {customerFileName} — {customerIds.length} ID(s)</div>}
 												{customerParseError && <Alert variant="danger" className="mt-2">{customerParseError}</Alert>}
@@ -799,9 +798,8 @@ function AssignContent() {
 
 								{triggerSubType === 'product' && (
 									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
-										<Form.Label style={{ fontWeight: 'bold' }}>Product-based trigger</Form.Label>
 										<div className="mb-2">
-											<Form.Label style={{ fontWeight: 600 }}>Upload CSV/Excel with product IDs (first column)</Form.Label>
+											<Form.Label style={{ fontWeight: 300 }}>Product Ids Upload, in .xlsx or .csv format</Form.Label>
 											<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleProductFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
 											{productFileName && <div className="small mt-1">Uploaded: {productFileName} — {productIds.length} ID(s)</div>}
 											{productParseError && <Alert variant="danger" className="mt-2">{productParseError}</Alert>}
