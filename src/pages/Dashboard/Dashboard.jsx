@@ -25,7 +25,7 @@ function Dashboard() {
   const handleContentImagesClick = useCallback(() => navigate('/content-library?filter=hasImages'), [navigate]);
   const handleContentVideosClick = useCallback(() => navigate('/content-library?filter=hasVideos'), [navigate]);
   const handleTotalContentClick = useCallback(() => navigate('/content'), [navigate]);
-  const handleBarClick = useCallback(() => navigate('/manage-playlists?tab=approved&expiring=1&expiringDays=5'), [navigate]);
+  const handleBarClick = useCallback(() => navigate('/settings?tab=listView'), [navigate]);
   const [playlists, setPlaylists] = useState([]);
   const [indexedDevices, setIndexedDevices] = useState(null);
   const [loadingIndexedDevices, setLoadingIndexedDevices] = useState(true);
@@ -467,6 +467,11 @@ function Dashboard() {
                     const idx = elts[0].index;
                     const state = visibleStateLabels[idx];
                     // Removed click debug log
+                    if (event && event.native && typeof event.native.stopImmediatePropagation === 'function') {
+                      event.native.stopImmediatePropagation();
+                    } else if (event && typeof event.stopPropagation === 'function') {
+                      event.stopPropagation();
+                    }
                     if (state) navigate(`/settings?tab=listView&state=${encodeURIComponent(state)}`);
                   } catch (e) {
                     // Best-effort fallback
