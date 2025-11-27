@@ -640,7 +640,7 @@ function AssignContent() {
 													setStoreIdInputText('');
 												}
 											}}
-											placeholder="e.g. INWBQA00001, INWBQA00002"
+											placeholder="e.g. INAPAML00007, INAPAML00004"
 											disabled={isReadOnly}
 										/>
 										<Form.Text className="text-muted">Tip: Type comma-separated store IDs and press <kbd>Enter</kbd> to add valid IDs to the filtered selection.</Form.Text>
@@ -666,7 +666,7 @@ function AssignContent() {
 												// Only update the filtered store ids; do not populate the storeIdInput tags
 												setFilteredStoreIds(ids);
 											}}
-											placeholder="Selected stores"
+											placeholder=""
 											classNamePrefix="react-select"
 											// Disable search and menu/dropdown so users cannot open the options; selection should be managed via Store IDs input
 											isSearchable={false}
