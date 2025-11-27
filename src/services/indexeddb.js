@@ -3,7 +3,7 @@ import { openDB } from 'idb';
 import { addAction } from './activityLog';
 
 const DB_NAME = 'ad-console-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const CONTENT_STORE = 'content';
 const DEVICE_STORE = 'devices';
 const PLAYLIST_STORE = 'playlists';
@@ -12,6 +12,7 @@ const ASSIGNMENT_STORE = 'assignments';
 export async function getDB() {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
+      console.info(`indexeddb.getDB: upgrading DB to v${DB_VERSION}`);
       if (!db.objectStoreNames.contains(CONTENT_STORE)) {
         db.createObjectStore(CONTENT_STORE, { keyPath: 'id', autoIncrement: true });
       }
@@ -19,10 +20,12 @@ export async function getDB() {
         db.createObjectStore(DEVICE_STORE, { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+        console.info('indexeddb.getDB: creating missing store - playlists');
         db.createObjectStore(PLAYLIST_STORE, { keyPath: 'id', autoIncrement: true });
       }
       // Also ensure assignments store is created so getDB covers all stores even if deviceIndexeddb initializes DB first
       if (!db.objectStoreNames.contains(ASSIGNMENT_STORE)) {
+        console.info('indexeddb.getDB: creating missing store - assignments');
         db.createObjectStore(ASSIGNMENT_STORE, { keyPath: 'assignmentId' });
       }
     },

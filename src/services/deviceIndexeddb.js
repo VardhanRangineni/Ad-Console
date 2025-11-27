@@ -3,7 +3,7 @@ import { storeList } from '../data/storeList';
 import { mockLocations } from '../data/mockLocations';
 
 const DB_NAME = 'ad-console-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const DEVICE_STORE = 'devices';
 const CONTENT_STORE = 'content';
@@ -13,6 +13,7 @@ const PLAYLIST_STORE = 'playlists';
 export async function getDeviceDB() {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
+      console.info(`deviceIndexeddb.getDeviceDB: upgrading DB to v${DB_VERSION}`);
       if (!db.objectStoreNames.contains(DEVICE_STORE)) {
         db.createObjectStore(DEVICE_STORE, { keyPath: 'id' });
       }
@@ -20,10 +21,12 @@ export async function getDeviceDB() {
         db.createObjectStore(CONTENT_STORE, { keyPath: 'id', autoIncrement: true });
       }
       if (!db.objectStoreNames.contains(ASSIGNMENT_STORE)) {
+        console.info('deviceIndexeddb.getDeviceDB: creating missing store - assignments');
         db.createObjectStore(ASSIGNMENT_STORE, { keyPath: 'assignmentId' });
       }
       // Ensure playlists store is created even if device DB initializer runs first
       if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+        console.info('deviceIndexeddb.getDeviceDB: creating missing store - playlists');
         db.createObjectStore(PLAYLIST_STORE, { keyPath: 'id', autoIncrement: true });
       }
     },
