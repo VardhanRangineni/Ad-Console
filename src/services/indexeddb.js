@@ -7,6 +7,7 @@ const DB_VERSION = 3;
 const CONTENT_STORE = 'content';
 const DEVICE_STORE = 'devices';
 const PLAYLIST_STORE = 'playlists';
+const ASSIGNMENT_STORE = 'assignments';
 
 export async function getDB() {
   return openDB(DB_NAME, DB_VERSION, {
@@ -19,6 +20,10 @@ export async function getDB() {
       }
       if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
         db.createObjectStore(PLAYLIST_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+      // Also ensure assignments store is created so getDB covers all stores even if deviceIndexeddb initializes DB first
+      if (!db.objectStoreNames.contains(ASSIGNMENT_STORE)) {
+        db.createObjectStore(ASSIGNMENT_STORE, { keyPath: 'assignmentId' });
       }
     },
   });
@@ -65,7 +70,17 @@ export async function deleteContent(id) {
 // Playlists helpers
 export async function addPlaylist(playlist) {
   const db = await getDB();
-  const id = await db.add(PLAYLIST_STORE, playlist);
+  if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+    console.warn('addPlaylist: playlists store is missing');
+    return null;
+  }
+  let id;
+  try {
+    id = await db.add(PLAYLIST_STORE, playlist);
+  } catch (err) {
+    console.error('Error adding playlist to DB', err);
+    throw err;
+  }
   try {
     addAction({ actionType: 'playlist.add', actor: 'system', message: 'Playlist added', details: { playlistId: id } });
   } catch (err) {
@@ -76,7 +91,7 @@ export async function addPlaylist(playlist) {
 
 export async function getAllPlaylists() {
   const db = await getDB();
-  if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return [];
+  if (!db.objectStoreNames.contains(PLAYLIST_STORE)) { console.warn('getAllPlaylists: playlists store missing'); return []; }
   return db.getAll(PLAYLIST_STORE);
 }
 

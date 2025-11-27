@@ -24,9 +24,17 @@ export async function updatePlaylistInDB(id, updates) {
 
 async function savePlaylistToDB(playlist) {
 	const db = await getDB();
-	if (!db.objectStoreNames.contains(PLAYLIST_STORE)) return;
-	// Return the new id so callers can reference it (e.g. to mark original playlist as disabled)
-	return await db.add(PLAYLIST_STORE, playlist);
+	if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+		console.warn('savePlaylistToDB: playlists store is missing in db');
+		return null;
+	}
+	try {
+		// Return the new id so callers can reference it (e.g. to mark original playlist as disabled)
+		return await db.add(PLAYLIST_STORE, playlist);
+	} catch (err) {
+		console.error('savePlaylistToDB: failed to add playlist', err);
+		throw err;
+	}
 }
 
 export async function getAllPlaylistsFromDB() {

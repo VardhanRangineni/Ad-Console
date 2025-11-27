@@ -8,6 +8,7 @@ const DB_VERSION = 3;
 const DEVICE_STORE = 'devices';
 const CONTENT_STORE = 'content';
 const ASSIGNMENT_STORE = 'assignments';
+const PLAYLIST_STORE = 'playlists';
 
 export async function getDeviceDB() {
   return openDB(DB_NAME, DB_VERSION, {
@@ -20,6 +21,10 @@ export async function getDeviceDB() {
       }
       if (!db.objectStoreNames.contains(ASSIGNMENT_STORE)) {
         db.createObjectStore(ASSIGNMENT_STORE, { keyPath: 'assignmentId' });
+      }
+      // Ensure playlists store is created even if device DB initializer runs first
+      if (!db.objectStoreNames.contains(PLAYLIST_STORE)) {
+        db.createObjectStore(PLAYLIST_STORE, { keyPath: 'id', autoIncrement: true });
       }
     },
   });
