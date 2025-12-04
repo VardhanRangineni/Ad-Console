@@ -379,27 +379,27 @@ function DeviceManagement() {
       return;
     }
 
-    // Validation: Check if Device Type + MAC Address combination already exists
-    const existingDeviceAssignment = assignments.find(a =>
-      a.deviceId === deviceToAssign &&
-      a.macAddress.toLowerCase() === macAddressToAssign.toLowerCase()
+    // Validation: Check if Device MAC Address already exists ANYWHERE (as device MAC or POS MAC)
+    const existingMacAssignment = assignments.find(a =>
+      a.macAddress.toLowerCase() === macAddressToAssign.toLowerCase() ||
+      (a.posMacAddress && a.posMacAddress.toLowerCase() === macAddressToAssign.toLowerCase())
     );
 
-    if (existingDeviceAssignment) {
-      setErrorMessage(`Device and MAC address combination already assigned for store ${existingDeviceAssignment.storeId}`);
+    if (existingMacAssignment) {
+      setErrorMessage(`This MAC ID is assigned to the store ${existingMacAssignment.storeId}`);
       setShowErrorModal(true);
       return;
     }
 
-    // Validation: Check if POS MAC Address already exists
+    // Validation: Check if POS MAC Address already exists ANYWHERE (as device MAC or POS MAC)
     if (posMacToAssign) {
       const existingPosAssignment = assignments.find(a =>
-        a.posMacAddress &&
-        a.posMacAddress.toLowerCase() === posMacToAssign.toLowerCase()
+        a.macAddress.toLowerCase() === posMacToAssign.toLowerCase() ||
+        (a.posMacAddress && a.posMacAddress.toLowerCase() === posMacToAssign.toLowerCase())
       );
 
       if (existingPosAssignment) {
-        setErrorMessage(`POS MAC address already assigned with a device in store ${existingPosAssignment.storeId}`);
+        setErrorMessage(`This MAC ID is assigned to the store ${existingPosAssignment.storeId}`);
         setShowErrorModal(true);
         return;
       }
