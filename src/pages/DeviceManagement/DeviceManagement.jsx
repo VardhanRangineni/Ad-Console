@@ -180,7 +180,6 @@ function DeviceManagement() {
   const [deleteDeviceState, setDeleteDeviceState] = React.useState(null);
   // Modal for disable warning and confirmation
   const [showDisableWarning, setShowDisableWarning] = React.useState(false);
-  const [disableWarningStores, setDisableWarningStores] = React.useState([]);
   const [showDisableConfirm, setShowDisableConfirm] = React.useState(false);
   const [pendingDisableDeviceId, setPendingDisableDeviceId] = React.useState(null);
   // Track disabled devices (array of device IDs)
@@ -227,7 +226,6 @@ function DeviceManagement() {
     }
     const assignedStores = assignments.filter(a => a.deviceId === deviceId).map(a => a.storeName || a.storeId);
     if (assignedStores.length > 0) {
-      setDisableWarningStores(assignedStores);
       setShowDisableWarning(true);
       return;
     }
