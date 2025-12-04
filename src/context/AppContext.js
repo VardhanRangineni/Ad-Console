@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { mockBackend } from '../services/mockBackend';
+
 import { mockWebSocket } from '../services/mockWebSocket';
 
 const AppContext = createContext();
@@ -14,13 +14,15 @@ export const AppProvider = ({ children }) => {
 
   // Load devices from backend
   const loadDevices = useCallback(async () => {
-    const deviceList = await mockBackend.getAllDevices();
+    // const deviceList = await mockBackend.getAllDevices();
+    const deviceList = [];
     setDevices(deviceList || []);
   }, []);
 
   // Load assignments from backend
   const loadAssignments = useCallback(async () => {
-    const assignmentList = await mockBackend.getAllAssignments();
+    // const assignmentList = await mockBackend.getAllAssignments();
+    const assignmentList = [];
     setAssignments(assignmentList || []);
   }, []);
 
@@ -53,26 +55,27 @@ export const AppProvider = ({ children }) => {
 
   // Register a new device
   const registerDevice = useCallback(async (deviceData) => {
-    const device = await mockBackend.registerDevice(deviceData);
+    // const device = await mockBackend.registerDevice(deviceData);
+    const device = { ...deviceData, id: Date.now() }; // Mock ID
     await loadDevices();
     return device;
   }, [loadDevices]);
 
   // Add a new content assignment
   const addAssignment = useCallback(async (assignment) => {
-    await mockBackend.addAssignment(assignment);
+    // await mockBackend.addAssignment(assignment);
     await loadAssignments();
   }, [loadAssignments]);
 
   // Delete an assignment
   const deleteAssignment = useCallback(async (id) => {
-    await mockBackend.deleteAssignment(id);
+    // await mockBackend.deleteAssignment(id);
     await loadAssignments();
   }, [loadAssignments]);
 
   // Delete a device
   const deleteDevice = useCallback(async (id) => {
-    await mockBackend.deleteDevice(id);
+    // await mockBackend.deleteDevice(id);
     await loadDevices();
   }, [loadDevices]);
 
@@ -84,12 +87,12 @@ export const AppProvider = ({ children }) => {
     selectedLocation,
     selectedContent,
     bulkAssignContent,
-    
+
     // State setters
     setSelectedLocation,
     setSelectedContent,
     setBulkAssignContent,
-    
+
     // Actions
     registerDevice,
     addAssignment,
