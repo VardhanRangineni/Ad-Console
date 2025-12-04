@@ -196,6 +196,9 @@ function AssignContent() {
 	const navigate = useNavigate();
 	const action = location && location.state ? location.state.action : null;
 	const isReadOnly = action === 'view';
+	// When editing an approved playlist, only allow end date changes
+	const isEditingApproved = action === 'edit' && location.state && location.state.playlist && location.state.playlist.status === 'approved';
+	const isFieldDisabled = isReadOnly || isEditingApproved;
 	// Helper to format region/territory string for display and storage
 	// Helper to format region/store code as per required nomenclature
 	function getRegionNomenclature({ territoryType, selectedCountry, selectedState, selectedCity, filteredStoreIds, storeIdInput }) {
@@ -292,6 +295,7 @@ function AssignContent() {
 	const [endDate, setEndDate] = useState("");
 	const [addedContent, setAddedContent] = useState([]);
 	const [currentDuration, setCurrentDuration] = useState("");
+	const [originalEndDate, setOriginalEndDate] = useState("");
 
 	// Pre-fill form if redirected from Manage Playlists (edit/clone)
 	useEffect(() => {
@@ -313,6 +317,8 @@ function AssignContent() {
 			}) : []);
 			setStartDate(row.startDate || todayStr);
 			setEndDate(row.endDate || '');
+			setOriginalEndDate(row.endDate || '');
+			setOriginalEndDate(row.endDate || '');
 			// prefill type and triggerInterval. If cloning, do not set editingPlaylistId
 			setPlaylistType(row.type || 'regular');
 			setTriggerInterval(row.triggerInterval || 5);
@@ -493,7 +499,7 @@ function AssignContent() {
 										checked={territoryType === 'country'}
 										onChange={handleTerritoryChange}
 										name="territoryType"
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 									/>
 									<Form.Check
 										type="radio"
@@ -504,7 +510,7 @@ function AssignContent() {
 										checked={territoryType === 'state'}
 										onChange={handleTerritoryChange}
 										name="territoryType"
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 									/>
 									<Form.Check
 										type="radio"
@@ -515,7 +521,7 @@ function AssignContent() {
 										checked={territoryType === 'city'}
 										onChange={handleTerritoryChange}
 										name="territoryType"
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 									/>
 									<Form.Check
 										type="radio"
@@ -526,7 +532,7 @@ function AssignContent() {
 										checked={territoryType === 'store'}
 										onChange={handleTerritoryChange}
 										name="territoryType"
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 									/>
 								</div>
 								<div className="mt-2" style={{ maxWidth: 300 }}>
@@ -536,7 +542,7 @@ function AssignContent() {
 										value={countryOptions.find(opt => opt.value === selectedCountry) || countryOptions[0]}
 										onChange={selected => setSelectedCountry(selected ? selected.value : 'India')}
 										isClearable={false}
-										isDisabled={isReadOnly}
+										isdisabled={isFieldDisabled}
 										classNamePrefix="react-select"
 										styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
 										placeholder="Select country..."
@@ -602,7 +608,7 @@ function AssignContent() {
 												isClearable
 												classNamePrefix="react-select"
 												styles={{ menu: provided => ({ ...provided, zIndex: 20 }) }}
-												isDisabled={isReadOnly}
+												isdisabled={isFieldDisabled}
 											/>
 										</Form.Group>
 									)}
@@ -649,7 +655,7 @@ function AssignContent() {
 												}
 											}}
 											placeholder="e.g. INAPAML00007, INAPAML00004"
-											disabled={isReadOnly}
+											disabled={isFieldDisabled}
 										/>
 										<Form.Text className="text-muted">Tip: Type comma-separated store IDs and press <kbd>Enter</kbd> to add valid IDs to the filtered selection.</Form.Text>
 										{invalidStoreIds.length > 0 && (
@@ -683,7 +689,7 @@ function AssignContent() {
 											components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
 											menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
 											styles={{ menu: provided => ({ ...provided, zIndex: 9999 }) }}
-											isDisabled={isReadOnly}
+											isdisabled={isFieldDisabled}
 											/>
 										) : null}
 									</Form.Group>
@@ -706,7 +712,7 @@ function AssignContent() {
 										}}
 										style={{ cursor: 'pointer' }}
 										onClick={e => e.target.showPicker && e.target.showPicker()}
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 									/>
 								</Form.Group>
 							</div>
@@ -716,9 +722,24 @@ function AssignContent() {
 									<Form.Control
 										type="date"
 										value={endDate}
-										onChange={e => setEndDate(e.target.value)}
-										min={startDate || new Date().toISOString().split('T')[0]}
-										max={startDate ? new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1) - 1).toISOString().split('T')[0] : ''}
+										onChange={e => {
+											const newDate = e.target.value;
+											const today = new Date().toISOString().split('T')[0];
+											// When editing approved playlist, validate: can only reduce date, not less than today
+											if (isEditingApproved && originalEndDate) {
+												if (newDate > originalEndDate) {
+													alert('You cannot increase the end date. You can only reduce it.');
+													return;
+												}
+												if (newDate < today) {
+													alert('End date cannot be earlier than today.');
+													return;
+												}
+											}
+											setEndDate(newDate);
+										}}
+										min={isEditingApproved ? new Date().toISOString().split('T')[0] : (startDate || new Date().toISOString().split('T')[0])}
+										max={isEditingApproved && originalEndDate ? originalEndDate : (startDate ? new Date(new Date(startDate).setFullYear(new Date(startDate).getFullYear() + 1) - 1).toISOString().split('T')[0] : '')}
 										disabled={!startDate || isReadOnly}
 										style={{ cursor: 'pointer' }}
 										onClick={e => e.target.showPicker && e.target.showPicker()}
@@ -738,7 +759,7 @@ function AssignContent() {
 								style={{ marginRight: 12 }}
 								checked={playlistType === 'regular'}
 								onChange={() => { setPlaylistType('regular'); setTriggerSubType(''); }}
-								disabled={isReadOnly}
+								disabled={isFieldDisabled}
 							/>
 							<Form.Check
 								type="radio"
@@ -747,7 +768,7 @@ function AssignContent() {
 								label={<label htmlFor="playlist-type-trigger" style={{ cursor: 'pointer', marginBottom: 0 }}>Trigger-based</label>}
 								checked={playlistType === 'trigger'}
 								onChange={() => { setPlaylistType('trigger'); setTriggerSubType(''); }}
-								disabled={isReadOnly}
+								disabled={isFieldDisabled}
 							/>
 						</div>
 						{playlistType === 'trigger' && (
@@ -758,7 +779,7 @@ function AssignContent() {
 										id="trigger-subtype"
 										value={triggerSubType}
 										onChange={e => setTriggerSubType(e.target.value)}
-										disabled={isReadOnly}
+										disabled={isFieldDisabled}
 										aria-label="Trigger subtype"
 										style={{ maxWidth: 320 }}
 									>
@@ -773,13 +794,13 @@ function AssignContent() {
 								{triggerSubType === 'customer' && (
 									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
 										<div className="mb-2 d-flex gap-3 align-items-center">
-											<Form.Check inline type="radio" id="customer-all" name="customerTriggerMode" label={<label htmlFor="customer-all" style={{ whiteSpace: 'nowrap' }}>All</label>} checked={customerTriggerMode === 'all'} onChange={() => setCustomerTriggerMode('all')} disabled={isReadOnly} />
-											<Form.Check inline type="radio" id="customer-specific" name="customerTriggerMode" label={<label htmlFor="customer-specific" style={{ whiteSpace: 'nowrap' }}>Few</label>} checked={customerTriggerMode === 'specific'} onChange={() => setCustomerTriggerMode('specific')} disabled={isReadOnly} />
+											<Form.Check inline type="radio" id="customer-all" name="customerTriggerMode" label={<label htmlFor="customer-all" style={{ whiteSpace: 'nowrap' }}>All</label>} checked={customerTriggerMode === 'all'} onChange={() => setCustomerTriggerMode('all')} disabled={isFieldDisabled} />
+											<Form.Check inline type="radio" id="customer-specific" name="customerTriggerMode" label={<label htmlFor="customer-specific" style={{ whiteSpace: 'nowrap' }}>Few</label>} checked={customerTriggerMode === 'specific'} onChange={() => setCustomerTriggerMode('specific')} disabled={isFieldDisabled} />
 										</div>
 										{customerTriggerMode === 'specific' && (
 											<div className="mb-2">
 												<Form.Label style={{ fontWeight: 300 }}>Customer Ids Upload, in .xlsx or .csv format</Form.Label>
-												<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleCustomerFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
+												<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleCustomerFileUpload(e.target.files && e.target.files[0])} disabled={isFieldDisabled} />
 												{customerFileName && <div className="small mt-1">Uploaded: {customerFileName} — {customerIds.length} ID(s)</div>}
 												{customerParseError && <Alert variant="danger" className="mt-2">{customerParseError}</Alert>}
 												{customerIds.length > 0 && (
@@ -790,8 +811,8 @@ function AssignContent() {
 										<div className="mb-2">
 											<Form.Label style={{ fontWeight: 'bold' }}>Trigger At</Form.Label>
 											<div className="d-flex gap-3 align-items-center">
-												<Form.Check inline type="radio" id="triggerAt-selection" name="triggerAt" label={<label htmlFor="triggerAt-selection" style={{ whiteSpace: 'nowrap' }}>Customer selection</label>} checked={triggerAt === 'customer-selection'} onChange={() => setTriggerAt('customer-selection')} disabled={isReadOnly} />
-												<Form.Check inline type="radio" id="triggerAt-invoice" name="triggerAt" label={<label htmlFor="triggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={triggerAt === 'invoice-generation'} onChange={() => setTriggerAt('invoice-generation')} disabled={isReadOnly} />
+												<Form.Check inline type="radio" id="triggerAt-selection" name="triggerAt" label={<label htmlFor="triggerAt-selection" style={{ whiteSpace: 'nowrap' }}>Customer selection</label>} checked={triggerAt === 'customer-selection'} onChange={() => setTriggerAt('customer-selection')} disabled={isFieldDisabled} />
+												<Form.Check inline type="radio" id="triggerAt-invoice" name="triggerAt" label={<label htmlFor="triggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={triggerAt === 'invoice-generation'} onChange={() => setTriggerAt('invoice-generation')} disabled={isFieldDisabled} />
 											</div>
 										</div>
 									</div>
@@ -801,7 +822,7 @@ function AssignContent() {
 									<div className="mt-2 w-100" style={{ minWidth: 220 }}>
 										<div className="mb-2">
 											<Form.Label style={{ fontWeight: 300 }}>Product Ids Upload, in .xlsx or .csv format</Form.Label>
-											<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleProductFileUpload(e.target.files && e.target.files[0])} disabled={isReadOnly} />
+											<Form.Control type="file" accept=".csv, .xlsx, .xls" onChange={e => handleProductFileUpload(e.target.files && e.target.files[0])} disabled={isFieldDisabled} />
 											{productFileName && <div className="small mt-1">Uploaded: {productFileName} — {productIds.length} ID(s)</div>}
 											{productParseError && <Alert variant="danger" className="mt-2">{productParseError}</Alert>}
 											{productIds.length > 0 && (
@@ -813,8 +834,8 @@ function AssignContent() {
 											<div className="mb-2">
 												<Form.Label style={{ fontWeight: 'bold' }}>Trigger At</Form.Label>
 												<div className="d-flex gap-3 align-items-center">
-													<Form.Check inline type="radio" id="productTriggerAt-add" name="productTriggerAt" label={<label htmlFor="productTriggerAt-add" style={{ whiteSpace: 'nowrap' }}>Add to cart</label>} checked={productTriggerAt === 'add-to-cart'} onChange={() => setProductTriggerAt('add-to-cart')} disabled={isReadOnly} />
-													<Form.Check inline type="radio" id="productTriggerAt-invoice" name="productTriggerAt" label={<label htmlFor="productTriggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={productTriggerAt === 'invoice-generation'} onChange={() => setProductTriggerAt('invoice-generation')} disabled={isReadOnly} />
+													<Form.Check inline type="radio" id="productTriggerAt-add" name="productTriggerAt" label={<label htmlFor="productTriggerAt-add" style={{ whiteSpace: 'nowrap' }}>Add to cart</label>} checked={productTriggerAt === 'add-to-cart'} onChange={() => setProductTriggerAt('add-to-cart')} disabled={isFieldDisabled} />
+													<Form.Check inline type="radio" id="productTriggerAt-invoice" name="productTriggerAt" label={<label htmlFor="productTriggerAt-invoice" style={{ whiteSpace: 'nowrap' }}>Invoice generation</label>} checked={productTriggerAt === 'invoice-generation'} onChange={() => setProductTriggerAt('invoice-generation')} disabled={isFieldDisabled} />
 												</div>
 											</div>
 										</div>
@@ -850,7 +871,7 @@ function AssignContent() {
 														}
 													}}
 													style={{ width: 100 }}
-													disabled={isReadOnly}
+													disabled={isFieldDisabled}
 													isInvalid={!!triggerIntervalError}
 												/>
 												<Form.Control.Feedback type="invalid">
@@ -867,19 +888,19 @@ function AssignContent() {
 											</div>
 											<div className="col-9 col-md-auto">
 												<div className="d-flex" style={{ gap: 6 }}>
-													<Form.Select id="trigger-start-hour" aria-label="Trigger start hour" value={triggerStartHour} onChange={e => setTriggerStartHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
+													<Form.Select id="trigger-start-hour" aria-label="Trigger start hour" value={triggerStartHour} onChange={e => setTriggerStartHour(e.target.value)} disabled={isFieldDisabled} style={{ width: 68 }}>
 														{Array.from({ length: 12 }).map((_, i) => {
 															const v = String(i + 1).padStart(2, '0');
 															return <option key={v} value={v}>{v}</option>;
 														})}
 													</Form.Select>
-													<Form.Select id="trigger-start-minute" aria-label="Trigger start minute" value={triggerStartMinute} onChange={e => setTriggerStartMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+													<Form.Select id="trigger-start-minute" aria-label="Trigger start minute" value={triggerStartMinute} onChange={e => setTriggerStartMinute(e.target.value)} disabled={isFieldDisabled} style={{ width: 74 }}>
 														{Array.from({ length: 12 }).map((_, i) => {
 															const m = String(i * 5).padStart(2, '0');
 															return <option key={m} value={m}>{m}</option>;
 														})}
 													</Form.Select>
-													<Form.Select id="trigger-start-ampm" aria-label="Trigger start AM/PM" value={triggerStartAmPm} onChange={e => setTriggerStartAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+													<Form.Select id="trigger-start-ampm" aria-label="Trigger start AM/PM" value={triggerStartAmPm} onChange={e => setTriggerStartAmPm(e.target.value)} disabled={isFieldDisabled} style={{ width: 74 }}>
 														<option value="AM">AM</option>
 														<option value="PM">PM</option>
 													</Form.Select>
@@ -893,19 +914,19 @@ function AssignContent() {
 											</div>
 											<div className="col-9 col-md-auto">
 												<div className="d-flex" style={{ gap: 6 }}>
-													<Form.Select id="trigger-stop-hour" aria-label="Trigger stop hour" value={triggerStopHour} onChange={e => setTriggerStopHour(e.target.value)} disabled={isReadOnly} style={{ width: 68 }}>
+													<Form.Select id="trigger-stop-hour" aria-label="Trigger stop hour" value={triggerStopHour} onChange={e => setTriggerStopHour(e.target.value)} disabled={isFieldDisabled} style={{ width: 68 }}>
 														{Array.from({ length: 12 }).map((_, i) => {
 															const v = String(i + 1).padStart(2, '0');
 															return <option key={v} value={v}>{v}</option>;
 														})}
 													</Form.Select>
-													<Form.Select id="trigger-stop-minute" aria-label="Trigger stop minute" value={triggerStopMinute} onChange={e => setTriggerStopMinute(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+													<Form.Select id="trigger-stop-minute" aria-label="Trigger stop minute" value={triggerStopMinute} onChange={e => setTriggerStopMinute(e.target.value)} disabled={isFieldDisabled} style={{ width: 74 }}>
 														{Array.from({ length: 12 }).map((_, i) => {
 															const m = String(i * 5).padStart(2, '0');
 															return <option key={m} value={m}>{m}</option>;
 														})}
 													</Form.Select>
-													<Form.Select id="trigger-stop-ampm" aria-label="Trigger stop AM/PM" value={triggerStopAmPm} onChange={e => setTriggerStopAmPm(e.target.value)} disabled={isReadOnly} style={{ width: 74 }}>
+													<Form.Select id="trigger-stop-ampm" aria-label="Trigger stop AM/PM" value={triggerStopAmPm} onChange={e => setTriggerStopAmPm(e.target.value)} disabled={isFieldDisabled} style={{ width: 74 }}>
 														<option value="AM">AM</option>
 														<option value="PM">PM</option>
 													</Form.Select>
@@ -1063,7 +1084,7 @@ function AssignContent() {
 												<td>{item.type}</td>
 												<td>{item.duration}</td>
 												<td>
-													<Button size="sm" variant="outline-danger" onClick={() => setAddedContent(addedContent.filter((_, i) => i !== idx))} disabled={isReadOnly}>Remove</Button>
+													<Button size="sm" variant="outline-danger" onClick={() => setAddedContent(addedContent.filter((_, i) => i !== idx))} disabled={isFieldDisabled}>Remove</Button>
 												</td>
 											</tr>
 										))}
@@ -1222,48 +1243,59 @@ function AssignContent() {
 										}
 
 										if (editingPlaylistId) {
-											const updatedPlaylist = {
-												id: editingPlaylistId,
-												playlistName,
-												territoryType,
-												selectedCountry,
-												selectedState: selectedState || null,
-												selectedCity: selectedCity || null,
-												filteredStoreIds: filteredStoreIds.length ? [...filteredStoreIds] : null,
-												storeIdInput: storeIdInput.length ? [...storeIdInput] : null,
-												selectedContent: addedContent.length ? addedContent.map(item => item.id) : null,
-												startDate,
-												endDate,
-												inactive: false,
-												status: wasApproved ? 'pending' : 'pending',
-												regionNomenclature: getRegionNomenclature({
-													territoryType,
-													selectedCountry,
-													selectedState,
-													selectedCity,
-													filteredStoreIds,
-													storeIdInput
-												}),
-												createdAt: Date.now(),
-												type,
-												...triggerOptions
-											};
-											// If this playlist was previously approved, we don't want to replace the approved entry.
-											// Instead, create a new draft that references the original (draftOf) and mark the original as disabled/pending.
 											const db = await getDB();
 											const original = await db.get(PLAYLIST_STORE, editingPlaylistId);
-											if (original && original.status === 'approved') {
-												// Create draft as a new record with reference to the original
-												const draft = { ...updatedPlaylist };
-												delete draft.id; // ensure add creates a new id
-												draft.status = 'pending';
-												draft.draftOf = editingPlaylistId;
-												const newDraftId = await savePlaylistToDB(draft);
-												// Mark original as disabled/has pending draft
-												await updatePlaylistInDB(editingPlaylistId, { disabledWhileEditing: true, pendingDraftId: newDraftId });
+											
+											// If editing approved playlist with only end date change, save directly without approval
+											if (isEditingApproved && original && original.status === 'approved') {
+												// Only update end date, keep everything else as is
+												await updatePlaylistInDB(editingPlaylistId, { 
+													endDate,
+													updatedAt: Date.now()
+												});
 											} else {
-												// If original wasn't approved (e.g. it was a pending draft), just update it
-												await updatePlaylistInDB(editingPlaylistId, updatedPlaylist);
+												// Regular edit flow (for non-approved or full edits)
+												const updatedPlaylist = {
+													id: editingPlaylistId,
+													playlistName,
+													territoryType,
+													selectedCountry,
+													selectedState: selectedState || null,
+													selectedCity: selectedCity || null,
+													filteredStoreIds: filteredStoreIds.length ? [...filteredStoreIds] : null,
+													storeIdInput: storeIdInput.length ? [...storeIdInput] : null,
+													selectedContent: addedContent.length ? addedContent.map(item => item.id) : null,
+													startDate,
+													endDate,
+													inactive: false,
+													status: wasApproved ? 'pending' : 'pending',
+													regionNomenclature: getRegionNomenclature({
+														territoryType,
+														selectedCountry,
+														selectedState,
+														selectedCity,
+														filteredStoreIds,
+														storeIdInput
+													}),
+													createdAt: Date.now(),
+													type,
+													...triggerOptions
+												};
+												// If this playlist was previously approved, we don't want to replace the approved entry.
+												// Instead, create a new draft that references the original (draftOf) and mark the original as disabled/pending.
+												if (original && original.status === 'approved') {
+													// Create draft as a new record with reference to the original
+													const draft = { ...updatedPlaylist };
+													delete draft.id; // ensure add creates a new id
+													draft.status = 'pending';
+													draft.draftOf = editingPlaylistId;
+													const newDraftId = await savePlaylistToDB(draft);
+													// Mark original as disabled/has pending draft
+													await updatePlaylistInDB(editingPlaylistId, { disabledWhileEditing: true, pendingDraftId: newDraftId });
+												} else {
+													// If original wasn't approved (e.g. it was a pending draft), just update it
+													await updatePlaylistInDB(editingPlaylistId, updatedPlaylist);
+												}
 											}
 										} else {
 											const newPlaylist = {
@@ -1294,7 +1326,16 @@ function AssignContent() {
 											await savePlaylistToDB(newPlaylist);
 										}
 
-										// Show success and reset
+										// Show success and handle navigation
+										if (isEditingApproved) {
+											// For approved playlist edits, navigate back immediately
+											setShowAddAlert(true);
+											setTimeout(() => {
+												setShowAddAlert(false);
+												navigate('/manage-playlists', { state: { tab: 'approved' } });
+											}, 1000);
+											return;
+										}
 										setShowAddAlert(true);
 										setEditingPlaylistId(null);
 										setWasApproved(false);
@@ -1325,7 +1366,7 @@ function AssignContent() {
 									}}
 											disabled={!playlistName.trim() || !addedContent.length || !startDate || !endDate || (playlistType === 'trigger' && !triggerSubType) || (playlistType === 'trigger' && triggerSubType === 'time' && (triggerIntervalError || !triggerInterval || Number(triggerInterval) < 5 || !computeTriggerTimeValidity().valid)) || (playlistType === 'trigger' && triggerSubType === 'customer' && customerTriggerMode === 'specific' && (!customerIds || customerIds.length === 0)) || (playlistType === 'trigger' && triggerSubType === 'product' && (!productIds || productIds.length === 0))}
 								>
-									{editingPlaylistId ? 'Save Changes' : 'Create Playlist'}
+									{isEditingApproved ? 'Update End Date' : (editingPlaylistId ? 'Save Changes' : 'Create Playlist')}
 								</Button>
 							) : (
 								(location && location.state && location.state.playlist && (location.state.playlist.status === undefined || location.state.playlist.status === 'pending')) ? (

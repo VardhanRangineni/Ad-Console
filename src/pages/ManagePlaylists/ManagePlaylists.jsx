@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Tab, Button, Alert } from 'react-bootstrap';
+import * as XLSX from 'xlsx';
 
 import { getAllContent, getDB } from '../../services/indexeddb';
 // Playlists store helpers using shared ad-console-db
@@ -30,64 +31,64 @@ function AssignContent() {
     const [searchApproved, setSearchApproved] = useState("");
     const [searchRejected, setSearchRejected] = useState("");
     const [searchInactive, setSearchInactive] = useState("");
-        // Check for expiring param in URL; allow passing days via expiringDays param
-            const [expiringOnly, setExpiringOnly] = useState(false);
-            const [expiringDays, setExpiringDays] = useState(5);
-            const [expiringDate, setExpiringDate] = useState(null);
-            const location = useLocation();
-            React.useEffect(() => {
-                const params = new URLSearchParams(location.search);
-                // Honor explicit `tab` query param first so callers can set the active tab
-                const tabParam = params.get('tab');
-                if (tabParam) {
-                    const allowed = new Set(['list', 'approved', 'rejected', 'inactive']);
-                    if (allowed.has(tabParam)) setActiveTab(tabParam);
-                }
-                // If expiringDate is present, prefer it over expiringDays in filters
-                const expiringDateParam = params.get('expiringDate');
-                if (expiringDateParam) {
-                    // accept YYYY-MM-DD or ISO date
-                    const parsed = new Date(expiringDateParam);
-                    if (!isNaN(parsed.getTime())) {
-                        setExpiringOnly(true);
-                        setExpiringDays(0); // not used when expiringDate is present
-                        setExpiringDate(expiringDateParam);
-                        if (!tabParam) setActiveTab('approved');
-                    }
-                } else {
-                    setExpiringDate(null);
-                }
-                // tabParam already handled above
-                if (params.get('expiring') === '1') {
-                    setExpiringOnly(true);
-                    // If no explicit tab param, prefer the approved tab when showing expiring
-                    if (!tabParam) setActiveTab('approved');
-                } else {
-                    setExpiringOnly(false);
-                }
-                const days = parseInt(params.get('expiringDays'), 10);
-                if (!expiringDateParam && !isNaN(days) && days > 0) setExpiringDays(days);
-                const filter = params.get('filter');
-                if (filter === 'videoOnly' || filter === 'imageOnly') {
-                    setContentFilter(filter);
-                    if (!tabParam) setActiveTab('approved');
-                } else {
-                    setContentFilter(null);
-                }
-            }, [location.search]);
-            // Load playlists from IndexedDB on mount
-            React.useEffect(() => {
-                async function loadPlaylists() {
-                        const all = await getAllPlaylistsFromDB();
-                        const changed = await ensureExpiredPlaylists(all);
-                        const play = changed ? await getAllPlaylistsFromDB() : all;
-                        setAddedRows(play.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-                        setInactiveRows(play.filter(r => r.inactive));
-                        setApprovedRows(play.filter(r => r.status === 'approved'));
-                        setRejectedRows(play.filter(r => r.status === 'rejected'));
-                }
-                loadPlaylists();
-            }, []);
+    // Check for expiring param in URL; allow passing days via expiringDays param
+    const [expiringOnly, setExpiringOnly] = useState(false);
+    const [expiringDays, setExpiringDays] = useState(5);
+    const [expiringDate, setExpiringDate] = useState(null);
+    const location = useLocation();
+    React.useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        // Honor explicit `tab` query param first so callers can set the active tab
+        const tabParam = params.get('tab');
+        if (tabParam) {
+            const allowed = new Set(['list', 'approved', 'rejected', 'inactive']);
+            if (allowed.has(tabParam)) setActiveTab(tabParam);
+        }
+        // If expiringDate is present, prefer it over expiringDays in filters
+        const expiringDateParam = params.get('expiringDate');
+        if (expiringDateParam) {
+            // accept YYYY-MM-DD or ISO date
+            const parsed = new Date(expiringDateParam);
+            if (!isNaN(parsed.getTime())) {
+                setExpiringOnly(true);
+                setExpiringDays(0); // not used when expiringDate is present
+                setExpiringDate(expiringDateParam);
+                if (!tabParam) setActiveTab('approved');
+            }
+        } else {
+            setExpiringDate(null);
+        }
+        // tabParam already handled above
+        if (params.get('expiring') === '1') {
+            setExpiringOnly(true);
+            // If no explicit tab param, prefer the approved tab when showing expiring
+            if (!tabParam) setActiveTab('approved');
+        } else {
+            setExpiringOnly(false);
+        }
+        const days = parseInt(params.get('expiringDays'), 10);
+        if (!expiringDateParam && !isNaN(days) && days > 0) setExpiringDays(days);
+        const filter = params.get('filter');
+        if (filter === 'videoOnly' || filter === 'imageOnly') {
+            setContentFilter(filter);
+            if (!tabParam) setActiveTab('approved');
+        } else {
+            setContentFilter(null);
+        }
+    }, [location.search]);
+    // Load playlists from IndexedDB on mount
+    React.useEffect(() => {
+        async function loadPlaylists() {
+            const all = await getAllPlaylistsFromDB();
+            const changed = await ensureExpiredPlaylists(all);
+            const play = changed ? await getAllPlaylistsFromDB() : all;
+            setAddedRows(play.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+            setInactiveRows(play.filter(r => r.inactive));
+            setApprovedRows(play.filter(r => r.status === 'approved'));
+            setRejectedRows(play.filter(r => r.status === 'rejected'));
+        }
+        loadPlaylists();
+    }, []);
 
     // Periodically check for expired playlists and update DB/state automatically
     React.useEffect(() => {
@@ -109,7 +110,7 @@ function AssignContent() {
         }, 60 * 1000); // every 60s
         return () => { mounted = false; clearInterval(interval); };
     }, []);
-        const [contentList, setContentList] = useState([]);
+    const [contentList, setContentList] = useState([]);
     // All hooks and state at the top
     const [activeTab, setActiveTab] = useState('list');
     const [contentFilter, setContentFilter] = useState(null); // 'videoOnly' | 'imageOnly' or null
@@ -155,7 +156,7 @@ function AssignContent() {
         const d = new Date(dt);
         if (isNaN(d.getTime())) return '-';
         const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const day = pad(d.getDate());
         const mon = months[d.getMonth()];
         const year = String(d.getFullYear()).slice(-2);
@@ -167,7 +168,7 @@ function AssignContent() {
         const d = new Date(dt);
         if (isNaN(d.getTime())) return '-';
         const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const day = pad(d.getDate());
         const mon = months[d.getMonth()];
         const year = String(d.getFullYear()).slice(-2);
@@ -182,7 +183,7 @@ function AssignContent() {
         let suffix = base.slice(-5);
         if (suffix.length < 5) suffix = suffix.padStart(5, '0');
         let sum = 0;
-        for (let i=0;i<base.length;i++) sum += base.charCodeAt(i);
+        for (let i = 0; i < base.length; i++) sum += base.charCodeAt(i);
         const letter = String.fromCharCode(65 + (sum % 26));
         return `OTG${suffix}${letter}`;
     }
@@ -231,6 +232,154 @@ function AssignContent() {
         });
     }
 
+    // Download Created playlists to Excel
+    function downloadCreatedPlaylistsToExcel() {
+        const filtered = addedRows.filter(row => {
+            const q = searchList.toLowerCase();
+            if (expiringOnly) {
+                if (expiringDate) {
+                    if (!row.endDate) return false;
+                    const end = new Date(row.endDate).toISOString().split('T')[0];
+                    return end === expiringDate;
+                }
+                return isExpiring(row);
+            }
+            if (!q) return true;
+            return (
+                (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                (row.type && String(row.type).toLowerCase().includes(q)) ||
+                (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+            );
+        });
+
+        const excelData = [];
+        filtered.forEach((row, idx) => {
+            const contents = row.selectedContent || [];
+            if (contents.length === 0) {
+                // No content, still add one row for the playlist
+                excelData.push({
+                    'Playlist Id': idx + 1,
+                    'Playlist Name': row.playlistName || '-',
+                    'Playlist Type': row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular',
+                    'Trigger Type': getTriggerTypeLabel(row),
+                    'From Date': row.startDate ? formatDateShort(row.startDate) : '-',
+                    'To Date': row.endDate ? formatDateShort(row.endDate) : '-',
+                    'Created By': row.createdBy || generateCreatorId(row, idx),
+                    'Created On': row.createdAt ? formatDateTime(row.createdAt) : '-',
+                    'Content Id': '-',
+                    'Content Name': '-'
+                });
+            } else {
+                // One row per content
+                contents.forEach(cid => {
+                    const content = _findContentById(cid);
+                    excelData.push({
+                        'Playlist Id': idx + 1,
+                        'Playlist Name': row.playlistName || '-',
+                        'Playlist Type': row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular',
+                        'Trigger Type': getTriggerTypeLabel(row),
+                        'From Date': row.startDate ? formatDateShort(row.startDate) : '-',
+                        'To Date': row.endDate ? formatDateShort(row.endDate) : '-',
+                        'Created By': row.createdBy || generateCreatorId(row, idx),
+                        'Created On': row.createdAt ? formatDateTime(row.createdAt) : '-',
+                        'Content Id': content ? (content.contentId || content.id || cid) : cid,
+                        'Content Name': content ? (content.name || content.title || '-') : '-'
+                    });
+                });
+            }
+        });
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Created Playlists');
+        XLSX.writeFile(wb, `Created_Playlists_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    // Download Approved playlists to Excel
+    function downloadApprovedPlaylistsToExcel() {
+        const filtered = approvedRows
+            .filter(row => !row.inactive)
+            .filter(row => {
+                if (expiringOnly) {
+                    if (expiringDate) {
+                        if (!row.endDate) return false;
+                        const end = new Date(row.endDate).toISOString().split('T')[0];
+                        return end === expiringDate;
+                    }
+                    return isExpiring(row);
+                }
+                return true;
+            })
+            .filter(row => {
+                const q = searchApproved.toLowerCase();
+                if (!q) return true;
+                return (
+                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                    (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                    (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                    (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                    (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                    (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                );
+            })
+            .filter(row => {
+                if (!contentFilter) return true;
+                if (contentFilter === 'videoOnly') return isVideoOnlyPlaylist(row);
+                if (contentFilter === 'imageOnly') return isImageOnlyPlaylist(row);
+                return true;
+            });
+
+        const excelData = [];
+        filtered.forEach((row, idx) => {
+            const contents = row.selectedContent || [];
+            if (contents.length === 0) {
+                // No content, still add one row for the playlist
+                excelData.push({
+                    'Playlist Id': idx + 1,
+                    'Playlist Name': row.playlistName || '-',
+                    'Playlist Type': row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular',
+                    'Trigger Type': getTriggerTypeLabel(row),
+                    'From Date': row.startDate ? formatDateShort(row.startDate) : '-',
+                    'To Date': row.endDate ? formatDateShort(row.endDate) : '-',
+                    'Created By': row.createdBy || generateCreatorId(row, idx),
+                    'Created On': row.createdAt ? formatDateTime(row.createdAt) : '-',
+                    'Reviewed by': row.approvedBy || generateCreatorId(row, idx),
+                    'Reviewed on': row.approvedAt ? formatDateTime(row.approvedAt) : '-',
+                    'Content Id': '-',
+                    'Content Name': '-'
+                });
+            } else {
+                // One row per content
+                contents.forEach(cid => {
+                    const content = _findContentById(cid);
+                    excelData.push({
+                        'Playlist Id': idx + 1,
+                        'Playlist Name': row.playlistName || '-',
+                        'Playlist Type': row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular',
+                        'Trigger Type': getTriggerTypeLabel(row),
+                        'From Date': row.startDate ? formatDateShort(row.startDate) : '-',
+                        'To Date': row.endDate ? formatDateShort(row.endDate) : '-',
+                        'Created By': row.createdBy || generateCreatorId(row, idx),
+                        'Created On': row.createdAt ? formatDateTime(row.createdAt) : '-',
+                        'Reviewed by': row.approvedBy || generateCreatorId(row, idx),
+                        'Reviewed on': row.approvedAt ? formatDateTime(row.approvedAt) : '-',
+                        'Content Id': content ? (content.contentId || content.id || cid) : cid,
+                        'Content Name': content ? (content.name || content.title || '-') : '-'
+                    });
+                });
+            }
+        });
+
+        const ws = XLSX.utils.json_to_sheet(excelData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Approved Playlists');
+        XLSX.writeFile(wb, `Approved_Playlists_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
     return (
         <div className="assign-content-page">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -247,39 +396,48 @@ function AssignContent() {
             >
                 <Tab eventKey="list" title="Created">
                     <div className="p-3">
-                           <div className="mb-2">
-                               <input
-                                   type="text"
-                                   className="form-control"
-                                   placeholder="Search by name, region, or store..."
-                                   value={searchList}
-                                   onChange={e => setSearchList(e.target.value)}
-                                   style={{ maxWidth: 320, display: 'inline-block' }}
-                               />
-                           </div>
-                           {addedRows.filter(row => {
-                               const q = searchList.toLowerCase();
-                               if (expiringOnly) {
-                                   if (expiringDate) {
-                                       if (!row.endDate) return false;
-                                       const end = new Date(row.endDate).toISOString().split('T')[0];
-                                       return end === expiringDate;
-                                   }
-                                   return isExpiring(row);
-                               }
-                               if (!q) return true;
-                               return (
-                                   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                   (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                   (row.type && String(row.type).toLowerCase().includes(q)) ||
-                                   (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                   (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                   (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                   (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                               );
-                           }).length > 0 ? (
-                               <div style={{ overflowX: 'auto' }}>
-                                   <table className="table table-bordered table-sm align-middle">
+                        <div className="mb-2 d-flex justify-content-between align-items-center">
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="Search by name, region, or store..."
+                                value={searchList}
+                                onChange={e => setSearchList(e.target.value)}
+                                style={{ maxWidth: 320, display: 'inline-block' }}
+                            />
+                            <Button 
+                                variant="success" 
+                                size="sm"
+                                onClick={downloadCreatedPlaylistsToExcel}
+                                disabled={addedRows.length === 0}
+                            >
+                                <i className="bi bi-file-earmark-excel me-2"></i>
+                                Download to Excel
+                            </Button>
+                        </div>
+                        {addedRows.filter(row => {
+                            const q = searchList.toLowerCase();
+                            if (expiringOnly) {
+                                if (expiringDate) {
+                                    if (!row.endDate) return false;
+                                    const end = new Date(row.endDate).toISOString().split('T')[0];
+                                    return end === expiringDate;
+                                }
+                                return isExpiring(row);
+                            }
+                            if (!q) return true;
+                            return (
+                                (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                (row.type && String(row.type).toLowerCase().includes(q)) ||
+                                (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                            );
+                        }).length > 0 ? (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="table table-bordered table-sm align-middle">
                                     <thead>
                                         <tr>
                                             <th>Playlist ID</th>
@@ -295,70 +453,70 @@ function AssignContent() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                           {addedRows
-                                               .filter(row => {
-                                                   const q = searchList.toLowerCase();
-                                                   if (!q) return true;
-                                                   return (
-                                                       (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                       (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                                       (row.type && String(row.type).toLowerCase().includes(q)) ||
-                                                       (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                                       (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                                       (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                                       (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                                                   );
-                                               })
-                                               .map((row, idx) => (
-                                            <tr key={row.id || idx}>
-                                                <td>{idx + 1}</td>
-                                                <td>
-                                                    <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
-                                                </td>
-                                                                <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                                <td>{getTriggerTypeLabel(row)}</td>
-                                                                <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                                <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
-                                                                <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
-                                                                <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                                <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
-                                                <td>
-                                                       {(!row.status || row.status === 'pending') ? (
-                                                           <>
-                                                               <Button size="sm" variant="success" className="ms-2" onClick={async () => {
-                                                                   const now = new Date().toISOString();
-                                                                   await updatePlaylistInDB(row.id, { status: 'approved', approvedAt: now });
-                                                                   // If this playlist was a draft created from an approved playlist, disable the original and mark replacement
-                                                                   if (row.draftOf) {
-                                                                       await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null, inactive: true, replacedBy: row.id });
-                                                                   }
-                                                                   // Reload all lists from DB to ensure correct tab movement
-                                                                   const all = await getAllPlaylistsFromDB();
-                                                                   setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-                                                                   setInactiveRows(all.filter(r => r.inactive));
-                                                                   setApprovedRows(all.filter(r => r.status === 'approved'));
-                                                                   setRejectedRows(all.filter(r => r.status === 'rejected'));
-                                                               }}>Approve</Button>
-                                                               <Button size="sm" variant="danger" className="ms-2" onClick={async () => {
-                                                                   const now = new Date().toISOString();
-                                                                   await updatePlaylistInDB(row.id, { status: 'rejected', rejectedAt: now });
-                                                                   // If this draft was for an approved playlist, re-enable the original
-                                                                   if (row.draftOf) {
-                                                                       await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null });
-                                                                   }
-                                                                   // Reload all lists from DB to ensure correct tab movement
-                                                                   const all = await getAllPlaylistsFromDB();
-                                                                   setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
-                                                                   setInactiveRows(all.filter(r => r.inactive));
-                                                                   setRejectedRows(all.filter(r => r.status === 'rejected'));
-                                                               }}>Reject</Button>
-                                                           </>
-                                                       ) : (
-                                                           <Button size="sm" variant="outline-primary" onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>View</Button>
-                                                       )}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {addedRows
+                                            .filter(row => {
+                                                const q = searchList.toLowerCase();
+                                                if (!q) return true;
+                                                return (
+                                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                    (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                    (row.type && String(row.type).toLowerCase().includes(q)) ||
+                                                    (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                                    (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                                    (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                                    (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                                                );
+                                            })
+                                            .map((row, idx) => (
+                                                <tr key={row.id || idx}>
+                                                    <td>{idx + 1}</td>
+                                                    <td>
+                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                    </td>
+                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
+                                                    <td>{getTriggerTypeLabel(row)}</td>
+                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                    <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                    <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
+                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                    <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
+                                                    <td>
+                                                        {(!row.status || row.status === 'pending') ? (
+                                                            <>
+                                                                <Button size="sm" variant="success" className="ms-2" onClick={async () => {
+                                                                    const now = new Date().toISOString();
+                                                                    await updatePlaylistInDB(row.id, { status: 'approved', approvedAt: now });
+                                                                    // If this playlist was a draft created from an approved playlist, disable the original and mark replacement
+                                                                    if (row.draftOf) {
+                                                                        await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null, inactive: true, replacedBy: row.id });
+                                                                    }
+                                                                    // Reload all lists from DB to ensure correct tab movement
+                                                                    const all = await getAllPlaylistsFromDB();
+                                                                    setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+                                                                    setInactiveRows(all.filter(r => r.inactive));
+                                                                    setApprovedRows(all.filter(r => r.status === 'approved'));
+                                                                    setRejectedRows(all.filter(r => r.status === 'rejected'));
+                                                                }}>Approve</Button>
+                                                                <Button size="sm" variant="danger" className="ms-2" onClick={async () => {
+                                                                    const now = new Date().toISOString();
+                                                                    await updatePlaylistInDB(row.id, { status: 'rejected', rejectedAt: now });
+                                                                    // If this draft was for an approved playlist, re-enable the original
+                                                                    if (row.draftOf) {
+                                                                        await updatePlaylistInDB(row.draftOf, { disabledWhileEditing: false, pendingDraftId: null });
+                                                                    }
+                                                                    // Reload all lists from DB to ensure correct tab movement
+                                                                    const all = await getAllPlaylistsFromDB();
+                                                                    setAddedRows(all.filter(r => !r.inactive && (r.status === undefined || r.status === 'pending')));
+                                                                    setInactiveRows(all.filter(r => r.inactive));
+                                                                    setRejectedRows(all.filter(r => r.status === 'rejected'));
+                                                                }}>Reject</Button>
+                                                            </>
+                                                        ) : (
+                                                            <Button size="sm" variant="outline-primary" onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>View</Button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -367,183 +525,192 @@ function AssignContent() {
                         )}
                     </div>
                 </Tab>
-                   <Tab eventKey="approved" title="Approved">
-                       <div className="p-3">
-                               {expiringOnly && (
-                                   <div className="mb-3">
-                                       <Alert variant="info">
-                                           {expiringDate ? (
-                                               <span>Showing approved playlists expiring on <strong>{formatDateShort(expiringDate)}</strong>.</span>
-                                           ) : (
-                                               <span>Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s).</span>
-                                           )}
-                                           &nbsp; <Button variant="link" className="p-0" onClick={() => { setExpiringOnly(false); setExpiringDate(null); navigate('/manage-playlists'); }}>Clear</Button>
-                                       </Alert>
-                                   </div>
-                               )}
-                           <div className="mb-2">
-                               <input
-                                   type="text"
-                                   className="form-control"
-                                   placeholder="Search by name, region, or store..."
-                                   value={searchApproved}
-                                   onChange={e => setSearchApproved(e.target.value)}
-                                   style={{ maxWidth: 320, display: 'inline-block' }}
-                               />
-                           </div>
-                               {approvedRows.filter(row => {
-                               const q = searchApproved.toLowerCase();
-                               if (expiringOnly) {
-                                   if (expiringDate) {
-                                       if (!row.endDate) return false;
-                                       const end = new Date(row.endDate).toISOString().split('T')[0];
-                                       return end === expiringDate;
-                                   }
-                                   return isExpiring(row);
-                               }
-                               if (!q) return true;
-                                                       return (
-                                                           (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                           (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                                           (row.type && String(row.type).toLowerCase().includes(q)) ||
-                                                           (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                                           (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                                           (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                                           (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                                                       );
-                           }).length > 0 ? (
-                               <div style={{ overflowX: 'auto' }}>
-                                   <table className="table table-bordered table-sm align-middle">
-                                       <thead>
-                                               <tr>
-                                                   <th>Playlist ID</th>
-                                                   <th>Playlist Name</th>
-                                                   <th>Type</th>
-                                                   <th>Trigger Type</th>
-                                                <th>From Date</th>
-                                                   <th>Effective From</th>
-                                                   <th>End Date</th>
-                                                <th>Contents</th>
-                                                <th>Approved by</th>
-                                                <th>Approved on</th>
-                                                <th>Created by</th>
-                                                <th>Created on</th>
-                                                <th>Action</th>
-                                               </tr>
-                                       </thead>
-                                       <tbody>
-                                           {approvedRows
-                                               .filter(row => !row.inactive)
-                                               .filter(row => {
-                                                   // If expiringOnly, only show playlists expiring in configured days or on a specific date
-                                                   if (expiringOnly) {
-                                                       if (expiringDate) {
-                                                           if (!row.endDate) return false;
-                                                           const end = new Date(row.endDate).toISOString().split('T')[0];
-                                                           return end === expiringDate;
-                                                       }
-                                                       return isExpiring(row);
-                                                   }
-                                                   return true;
-                                               })
-                                               .filter(row => {
-                                                   const q = searchApproved.toLowerCase();
-                                                   if (!q) return true;
-                                                   return (
-                                                       (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                       (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                                       (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                                       (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                                       (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                                       (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                                                   );
-                                               })
-                                               .filter(row => {
-                                                   if (!contentFilter) return true;
-                                                   if (contentFilter === 'videoOnly') return isVideoOnlyPlaylist(row);
-                                                   if (contentFilter === 'imageOnly') return isImageOnlyPlaylist(row);
-                                                   return true;
-                                               })
-                                               .map((row, idx) => (
-                                               <tr key={row.id || idx} style={(row.inactive || row.disabledWhileEditing || row.pendingDraftId) ? { opacity: 0.6, background: '#f8d7da' } : {}}>
-                                                   <td>{idx + 1}</td>
-                                                   <td>
-                                                       <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
-                                                   </td>
-                                                   <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                   <td>{getTriggerTypeLabel(row)}</td>
-                                                   <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
-                                                   <td>{(() => {
-                                                       const start = row.startDate ? new Date(row.startDate) : null;
-                                                       const approved = row.approvedAt ? new Date(row.approvedAt) : (row.updatedAt ? new Date(row.updatedAt) : null);
-                                                       if (start && approved) {
-                                                           return start < approved ? formatDateShort(approved) : formatDateShort(start);
-                                                       } else if (start) {
-                                                           return formatDateShort(start);
-                                                       } else if (approved) {
-                                                           return formatDateShort(approved);
-                                                       } else {
-                                                           return '-';
-                                                       }
-                                                   })()}</td>
-                                                   <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
-                                                   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                   <td className="font-monospace small">{row.approvedBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.approvedAt ? formatDateTime(row.approvedAt) : '-'}</td>
-                                                   <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
-                                                   <td>
-                                                       {row.inactive ? (
-                                                           <>
-                                                               <span className="badge bg-danger">Disabled</span>
-                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
-                                                               }}>Clone</Button>
-                                                           </>
-                                                       ) : row.pendingDraftId || row.disabledWhileEditing ? (
-                                                           <>
-                                                               <span className="badge bg-secondary">Pending Update</span>
-                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'view' } });
-                                                               }}>View</Button>
-                                                               <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
-                                                               }}>Clone</Button>
-                                                           </>
-                                                       ) : (
-                                                           <>
-                                                               <Button size="sm" variant="primary" className="me-2" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'edit' } });
-                                                               }}>Edit</Button>
-                                                               <Button size="sm" variant="outline-primary" onClick={() => {
-                                                                   navigate('/assign', { state: { playlist: row, action: 'clone' } });
-                                                               }}>Clone</Button>
-                                                           </>
-                                                       )}
-                                                   </td>
-                                               </tr>
-                                           ))}
-                                       </tbody>
-                                   </table>
-                               </div>
-                           ) : (
-                               <Alert variant="secondary">No approved playlists.</Alert>
-                           )}
-                       </div>
-                   </Tab>
+                <Tab eventKey="approved" title="Approved">
+                    <div className="p-3">
+                        {expiringOnly && (
+                            <div className="mb-3">
+                                <Alert variant="info">
+                                    {expiringDate ? (
+                                        <span>Showing approved playlists expiring on <strong>{formatDateShort(expiringDate)}</strong>.</span>
+                                    ) : (
+                                        <span>Showing approved playlists expiring in the next <strong>{expiringDays}</strong> day(s).</span>
+                                    )}
+                                    &nbsp; <Button variant="link" className="p-0" onClick={() => { setExpiringOnly(false); setExpiringDate(null); navigate('/manage-playlists'); }}>Clear</Button>
+                                </Alert>
+                            </div>
+                        )}
+                        <div className="mb-2 d-flex justify-content-between align-items-center">
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="Search by name, region, or store..."
+                                value={searchApproved}
+                                onChange={e => setSearchApproved(e.target.value)}
+                                style={{ maxWidth: 320, display: 'inline-block' }}
+                            />
+                            <Button 
+                                variant="success" 
+                                size="sm"
+                                onClick={downloadApprovedPlaylistsToExcel}
+                                disabled={approvedRows.filter(r => !r.inactive).length === 0}
+                            >
+                                <i className="bi bi-file-earmark-excel me-2"></i>
+                                Download to Excel
+                            </Button>
+                        </div>
+                        {approvedRows.filter(row => {
+                            const q = searchApproved.toLowerCase();
+                            if (expiringOnly) {
+                                if (expiringDate) {
+                                    if (!row.endDate) return false;
+                                    const end = new Date(row.endDate).toISOString().split('T')[0];
+                                    return end === expiringDate;
+                                }
+                                return isExpiring(row);
+                            }
+                            if (!q) return true;
+                            return (
+                                (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                (row.type && String(row.type).toLowerCase().includes(q)) ||
+                                (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                            );
+                        }).length > 0 ? (
+                            <div style={{ overflowX: 'auto' }}>
+                                <table className="table table-bordered table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Playlist ID</th>
+                                            <th>Playlist Name</th>
+                                            <th>Type</th>
+                                            <th>Trigger Type</th>
+                                            <th>From Date</th>
+                                            <th>Effective From</th>
+                                            <th>End Date</th>
+                                            <th>Contents</th>
+                                            <th>Reviewed by</th>
+                                            <th>Reviewed on</th>
+                                            <th>Created by</th>
+                                            <th>Created on</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {approvedRows
+                                            .filter(row => !row.inactive)
+                                            .filter(row => {
+                                                // If expiringOnly, only show playlists expiring in configured days or on a specific date
+                                                if (expiringOnly) {
+                                                    if (expiringDate) {
+                                                        if (!row.endDate) return false;
+                                                        const end = new Date(row.endDate).toISOString().split('T')[0];
+                                                        return end === expiringDate;
+                                                    }
+                                                    return isExpiring(row);
+                                                }
+                                                return true;
+                                            })
+                                            .filter(row => {
+                                                const q = searchApproved.toLowerCase();
+                                                if (!q) return true;
+                                                return (
+                                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                    (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                    (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                                    (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                                    (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                                    (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                                                );
+                                            })
+                                            .filter(row => {
+                                                if (!contentFilter) return true;
+                                                if (contentFilter === 'videoOnly') return isVideoOnlyPlaylist(row);
+                                                if (contentFilter === 'imageOnly') return isImageOnlyPlaylist(row);
+                                                return true;
+                                            })
+                                            .map((row, idx) => (
+                                                <tr key={row.id || idx} style={(row.inactive || row.disabledWhileEditing || row.pendingDraftId) ? { opacity: 0.6, background: '#f8d7da' } : {}}>
+                                                    <td>{idx + 1}</td>
+                                                    <td>
+                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                    </td>
+                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
+                                                    <td>{getTriggerTypeLabel(row)}</td>
+                                                    <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                    <td>{(() => {
+                                                        const start = row.startDate ? new Date(row.startDate) : null;
+                                                        const approved = row.approvedAt ? new Date(row.approvedAt) : (row.updatedAt ? new Date(row.updatedAt) : null);
+                                                        if (start && approved) {
+                                                            return start < approved ? formatDateShort(approved) : formatDateShort(start);
+                                                        } else if (start) {
+                                                            return formatDateShort(start);
+                                                        } else if (approved) {
+                                                            return formatDateShort(approved);
+                                                        } else {
+                                                            return '-';
+                                                        }
+                                                    })()}</td>
+                                                    <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
+                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                    <td className="font-monospace small">{row.approvedBy || generateCreatorId(row, idx)}</td>
+                                                    <td>{row.approvedAt ? formatDateTime(row.approvedAt) : '-'}</td>
+                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                    <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
+                                                    <td>
+                                                        {row.inactive ? (
+                                                            <>
+                                                                <span className="badge bg-danger">Disabled</span>
+                                                                <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                    navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                                }}>Clone</Button>
+                                                            </>
+                                                        ) : row.pendingDraftId || row.disabledWhileEditing ? (
+                                                            <>
+                                                                <span className="badge bg-secondary">Pending Update</span>
+                                                                <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                    navigate('/assign', { state: { playlist: row, action: 'view' } });
+                                                                }}>View</Button>
+                                                                <Button size="sm" variant="outline-primary" className="ms-2" onClick={() => {
+                                                                    navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                                }}>Clone</Button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Button size="sm" variant="primary" className="me-2" onClick={() => {
+                                                                    navigate('/assign', { state: { playlist: row, action: 'edit' } });
+                                                                }}>Edit</Button>
+                                                                <Button size="sm" variant="outline-primary" onClick={() => {
+                                                                    navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                                }}>Clone</Button>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <Alert variant="secondary">No approved playlists.</Alert>
+                        )}
+                    </div>
+                </Tab>
                 <Tab eventKey="rejected" title="Rejected">
                     <div className="p-3">
                         {rejectedRows.length > 0 ? (
                             <div style={{ overflowX: 'auto' }}>
                                 <div className="mb-2" style={{ maxWidth: 320 }}>
-                                               <input
-                                                   type="text"
-                                                   className="form-control"
-                                                   placeholder="Search by name, region, or store..."
-                                                   value={searchRejected}
-                                                   onChange={e => setSearchRejected(e.target.value)}
-                                               />
-                                           </div>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="Search by name, region, or store..."
+                                        value={searchRejected}
+                                        onChange={e => setSearchRejected(e.target.value)}
+                                    />
+                                </div>
 
                                 <table className="table table-bordered table-sm align-middle">
                                     <thead>
@@ -558,47 +725,47 @@ function AssignContent() {
                                             <th>Rejected on</th>
                                             <th>Created by</th>
                                             <th>Created on</th>
-                                            
+
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                           {rejectedRows
-                                               .filter(row => {
-                                                   const q = searchRejected.toLowerCase();
-                                                   if (!q) return true;
-                                                   return (
-                                                       (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                       (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
-                                                       (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
-                                                       (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
-                                                       (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
-                                                       (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
-                                                   );
-                                               })
-                                               .map((row, idx) => (
-                                               <tr key={row.id || idx}>
-                                                   <td>{idx + 1}</td>
-                                                   <td>
-                                                       <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
-                                                   </td>
-                                                   <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                   <td>{getTriggerTypeLabel(row)}</td>
-                                                   <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
-                                                   <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                   
-                                                   <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.rejectedAt ? formatDateTime(row.rejectedAt) : '-'}</td>
-                                                   
-                                                   <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                   <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
-                                                   <td>
-                                                       <Button size="sm" variant="outline-primary" onClick={() => {
-                                                           navigate('/assign', { state: { playlist: row, action: 'clone' } });
-                                                       }}>Clone</Button>
-                                                   </td>
-                                               </tr>
-                                           ))}
+                                        {rejectedRows
+                                            .filter(row => {
+                                                const q = searchRejected.toLowerCase();
+                                                if (!q) return true;
+                                                return (
+                                                    (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                    (row.territoryType && row.territoryType.toLowerCase().includes(q)) ||
+                                                    (row.selectedState && row.selectedState.toLowerCase().includes(q)) ||
+                                                    (row.selectedCity && row.selectedCity.toLowerCase().includes(q)) ||
+                                                    (row.filteredStoreIds && row.filteredStoreIds.join(",").toLowerCase().includes(q)) ||
+                                                    (row.storeIdInput && row.storeIdInput.join(",").toLowerCase().includes(q))
+                                                );
+                                            })
+                                            .map((row, idx) => (
+                                                <tr key={row.id || idx}>
+                                                    <td>{idx + 1}</td>
+                                                    <td>
+                                                        <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                    </td>
+                                                    <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
+                                                    <td>{getTriggerTypeLabel(row)}</td>
+                                                    <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+
+                                                    <td className="font-monospace small">{row.rejectedBy || generateCreatorId(row, idx)}</td>
+                                                    <td>{row.rejectedAt ? formatDateTime(row.rejectedAt) : '-'}</td>
+
+                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                    <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
+                                                    <td>
+                                                        <Button size="sm" variant="outline-primary" onClick={() => {
+                                                            navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                        }}>Clone</Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -609,69 +776,69 @@ function AssignContent() {
                 </Tab>
                 <Tab eventKey="inactive" title="Expired">
                     <div className="p-3">
-                           <div className="mb-2">
-                               <input
-                                   type="text"
-                                   className="form-control"
-                                   placeholder="Search by name or type..."
-                                   value={searchInactive}
-                                   onChange={e => setSearchInactive(e.target.value)}
-                                   style={{ maxWidth: 320, display: 'inline-block' }}
-                               />
-                           </div>
-                           {inactiveRows.filter(row => {
-                               const q = searchInactive.toLowerCase();
-                               if (!q) return true;
-                               return (
-                                   (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                   (row.type && String(row.type).toLowerCase().includes(q))
-                               );
-                           }).length > 0 ? (
-                               <div>
-                                   <div style={{ overflowX: 'auto' }}>
-                                       <table className="table table-bordered table-sm align-middle">
+                        <div className="mb-2">
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="Search by name or type..."
+                                value={searchInactive}
+                                onChange={e => setSearchInactive(e.target.value)}
+                                style={{ maxWidth: 320, display: 'inline-block' }}
+                            />
+                        </div>
+                        {inactiveRows.filter(row => {
+                            const q = searchInactive.toLowerCase();
+                            if (!q) return true;
+                            return (
+                                (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                (row.type && String(row.type).toLowerCase().includes(q))
+                            );
+                        }).length > 0 ? (
+                            <div>
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table className="table table-bordered table-sm align-middle">
                                         <thead>
-                                                                    <tr>
-                                                                        <th>Playlist Name</th>
-                                                                        <th>Type</th>
-                                                                        <th>Trigger Type</th>
-                                                                        <th>Contents</th>
-                                                                        <th>From Date</th>
-                                                                        <th>End Date</th>
-                                                                        <th>Created by</th>
-                                                                        <th>Created on</th>
-                                                                        <th>Action</th>
-                                                                    </tr>
+                                            <tr>
+                                                <th>Playlist Name</th>
+                                                <th>Type</th>
+                                                <th>Trigger Type</th>
+                                                <th>Contents</th>
+                                                <th>From Date</th>
+                                                <th>End Date</th>
+                                                <th>Created by</th>
+                                                <th>Created on</th>
+                                                <th>Action</th>
+                                            </tr>
                                         </thead>
                                         <tbody>
-                                               {inactiveRows
-                                                   .filter(row => {
-                                                           const q = searchInactive.toLowerCase();
-                                                           if (!q) return true;
-                                                           return (
-                                                               (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
-                                                               (row.type && String(row.type).toLowerCase().includes(q))
-                                                           );
-                                                       })
-                                                   .map((row, idx) => (
-                                                   <tr key={idx}>
-                                                       <td>
-                                                           <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
-                                                       </td>
-                                                                         <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
-                                                                     <td>{getTriggerTypeLabel(row)}</td>
-                                                    <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
-                                                    <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
-                                                    <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
-                                                    <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
-                                                    <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
-                                                    <td>
-                                                        <Button size="sm" variant="outline-primary" onClick={() => {
-                                                            navigate('/assign', { state: { playlist: row, action: 'clone' } });
-                                                        }}>Clone</Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {inactiveRows
+                                                .filter(row => {
+                                                    const q = searchInactive.toLowerCase();
+                                                    if (!q) return true;
+                                                    return (
+                                                        (row.playlistName && row.playlistName.toLowerCase().includes(q)) ||
+                                                        (row.type && String(row.type).toLowerCase().includes(q))
+                                                    );
+                                                })
+                                                .map((row, idx) => (
+                                                    <tr key={idx}>
+                                                        <td>
+                                                            <Button variant="link" style={{ padding: 0 }} onClick={() => navigate('/assign', { state: { playlist: row, action: 'view' } })}>{row.playlistName || '-'}</Button>
+                                                        </td>
+                                                        <td>{row.type ? (row.type === 'trigger' ? 'Trigger' : 'Regular') : 'Regular'}</td>
+                                                        <td>{getTriggerTypeLabel(row)}</td>
+                                                        <td>{row.selectedContent ? row.selectedContent.length : 0}</td>
+                                                        <td>{row.startDate ? formatDateShort(row.startDate) : '-'}</td>
+                                                        <td>{row.endDate ? formatDateShort(row.endDate) : '-'}</td>
+                                                        <td>{row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
+                                                        <td className="font-monospace small">{row.createdBy || generateCreatorId(row, idx)}</td>
+                                                        <td>
+                                                            <Button size="sm" variant="outline-primary" onClick={() => {
+                                                                navigate('/assign', { state: { playlist: row, action: 'clone' } });
+                                                            }}>Clone</Button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
                                         </tbody>
                                     </table>
                                 </div>

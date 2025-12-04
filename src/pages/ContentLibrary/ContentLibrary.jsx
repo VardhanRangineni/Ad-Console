@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Table, Button, Modal, Tabs, Tab, Form, Alert, Badge } from 'react-bootstrap';
 import Select from 'react-select';
-import { addContent, getAllContent, updateContent } from '../../services/indexeddb';
+import { addContent, getAllContent, updateContent, getAllPlaylists } from '../../services/indexeddb';
 import { productList } from '../../data/productList';
 import { getAllDevices } from '../../services/deviceIndexeddb';
 
@@ -40,6 +40,8 @@ function ContentLibrary() {
   const [editProductIdInput, setEditProductIdInput] = useState('');
   const [editSelectedProductOptions, setEditSelectedProductOptions] = useState([]);
   const [editProductInputError, setEditProductInputError] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const addUploadInputRef = useRef(null);
   const editUploadInputRef = useRef(null);
 
@@ -73,7 +75,7 @@ function ContentLibrary() {
   }, [location.search]);
 
   // Load device resolutions from actual devices in localStorage
-  
+
   useEffect(() => {
     async function loadDeviceResolutions() {
       const devices = await getAllDevices();
@@ -575,12 +577,12 @@ function ContentLibrary() {
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                            <th>Content ID</th>
-                            <th>Content Name</th>
-                            <th>Content Type</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                          </tr>
+                        <th>Content ID</th>
+                        <th>Content Name</th>
+                        <th>Content Type</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
@@ -608,9 +610,26 @@ function ContentLibrary() {
                                 type="switch"
                                 id={`switch-content-${content.id}`}
                                 checked={content.active !== false}
-                                onChange={() => {
+                                onChange={async () => {
                                   if (content.active !== false) {
-                                    // If toggling to inactive, show confirmation modal
+                                    // If toggling to inactive, check for active playlist assignments
+                                    const allPlaylists = await getAllPlaylists();
+                                    const activePlaylists = allPlaylists.filter(p =>
+                                      !p.inactive &&
+                                      (p.status === undefined || p.status === 'pending' || p.status === 'approved')
+                                    );
+
+                                    const isAssigned = activePlaylists.some(p =>
+                                      p.selectedContent && p.selectedContent.includes(content.id)
+                                    );
+
+                                    if (isAssigned) {
+                                      setErrorMessage("This content is mapped to active playlist/s, remove from the playlists to de-activate");
+                                      setShowErrorModal(true);
+                                      return;
+                                    }
+
+                                    // If not assigned to active playlists, show confirmation modal
                                     setDisableConfirmId(content.id);
                                     setShowDisableModal(true);
                                   } else {
@@ -644,11 +663,11 @@ function ContentLibrary() {
                   <Table bordered hover responsive className="align-middle mb-0">
                     <thead className="table-light">
                       <tr>
-                            <th>Content ID</th>
-                            <th>Content Name</th>
-                            <th>Content Type</th>
-                            <th>Status</th>
-                          </tr>
+                        <th>Content ID</th>
+                        <th>Content Name</th>
+                        <th>Content Type</th>
+                        <th>Status</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {filteredContent.length === 0 ? (
@@ -673,6 +692,20 @@ function ContentLibrary() {
           </div>
         </div>
         {/* Edit Modal */}
+        <Modal show={showErrorModal} onHide={() => setShowErrorModal(false)} centered>
+          <Modal.Header closeButton className="bg-danger text-white">
+            <Modal.Title><i className="bi bi-exclamation-triangle-fill me-2"></i>Validation Error</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="text-center py-4">
+            <p className="lead mb-0">{errorMessage}</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowErrorModal(false)}>
+              Close
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
         <Modal show={showEditModal} onHide={closeEditModal} size="xl">
           <Modal.Header closeButton>
             <Modal.Title>Edit Content</Modal.Title>
@@ -840,25 +873,25 @@ function ContentLibrary() {
                         {editProductInputError && <div className="text-danger mt-2">{editProductInputError}</div>}
                       </div>
                     </div>
-                          <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
-                      <div>
-                        {editSelectedProductOptions.length > 0 && (
-                          <>
-                            <div className="text-muted small mb-1">{editSelectedProductOptions.length} {editSelectedProductOptions.length === 1 ? 'product' : 'products'}</div>
-                            <Select
-                              isMulti
-                              isSearchable={false}
-                              menuIsOpen={false}
-                              options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
-                              value={editSelectedProductOptions}
-                              onChange={handleEditProductsChange}
-                              placeholder="Select products..."
-                              classNamePrefix="react-select"
-                              components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
-                              />
-                              </>
-                            )}
-                      </div>
+                    <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
+                    <div>
+                      {editSelectedProductOptions.length > 0 && (
+                        <>
+                          <div className="text-muted small mb-1">{editSelectedProductOptions.length} {editSelectedProductOptions.length === 1 ? 'product' : 'products'}</div>
+                          <Select
+                            isMulti
+                            isSearchable={false}
+                            menuIsOpen={false}
+                            options={productList.map(p => ({ value: p.id, label: `${p.id} - ${p.name}` }))}
+                            value={editSelectedProductOptions}
+                            onChange={handleEditProductsChange}
+                            placeholder="Select products..."
+                            classNamePrefix="react-select"
+                            components={{ DropdownIndicator: () => null, IndicatorSeparator: () => null }}
+                          />
+                        </>
+                      )}
+                    </div>
                   </Form.Group>
                 </div>
               </>
@@ -878,50 +911,50 @@ function ContentLibrary() {
           <Modal.Body>
             {viewContent && (
               <>
-              <div className="d-flex flex-wrap gap-3 mb-3">
-                {(viewContent.slides || [viewContent.fileUrl]).map((media, idx) => (
-                  <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, position: 'relative' }}>
-                    {media.type === 'video' ? (
-                      <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
-                    ) : (
-                      <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
-                    )}
-                    <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
-                    {typeof media.width === 'number' && typeof media.height === 'number' && (
-                      <div className="text-center text-muted" style={{ fontSize: '0.95em' }}>
-                        {`Size: ${media.width} x ${media.height}`}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="mb-3">
-                <strong>Associated Products</strong>
-                {Array.isArray(viewContent.products) && viewContent.products.length > 0 ? (
-                  <Table bordered size="sm" className="mt-2">
-                    <thead>
-                      <tr>
-                        <th>Product ID</th>
-                        <th>Product Name</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewContent.products.map((pid, i) => {
-                        const found = productList.find(p => p.id === pid || p.id === (pid || '').toString());
-                        return (
-                          <tr key={i}>
-                            <td>{pid}</td>
-                            <td>{found ? found.name : 'Unknown product'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </Table>
-                ) : (
-                  <div className="text-muted mt-2">No products associated with this content.</div>
-                )}
-              </div>
-            </>
+                <div className="d-flex flex-wrap gap-3 mb-3">
+                  {(viewContent.slides || [viewContent.fileUrl]).map((media, idx) => (
+                    <div key={idx} style={{ border: '1px solid #eee', borderRadius: 8, padding: 8, position: 'relative' }}>
+                      {media.type === 'video' ? (
+                        <video src={media.data} controls style={{ maxWidth: 180, maxHeight: 180 }} />
+                      ) : (
+                        <img src={media.data || media} alt={`slide-${idx}`} style={{ maxWidth: 180, maxHeight: 180 }} />
+                      )}
+                      <div className="text-center mt-2">{media.type === 'video' ? `Video ${idx + 1}` : `Image ${idx + 1}`}</div>
+                      {typeof media.width === 'number' && typeof media.height === 'number' && (
+                        <div className="text-center text-muted" style={{ fontSize: '0.95em' }}>
+                          {`Size: ${media.width} x ${media.height}`}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mb-3">
+                  <strong>Associated Products</strong>
+                  {Array.isArray(viewContent.products) && viewContent.products.length > 0 ? (
+                    <Table bordered size="sm" className="mt-2">
+                      <thead>
+                        <tr>
+                          <th>Product ID</th>
+                          <th>Product Name</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewContent.products.map((pid, i) => {
+                          const found = productList.find(p => p.id === pid || p.id === (pid || '').toString());
+                          return (
+                            <tr key={i}>
+                              <td>{pid}</td>
+                              <td>{found ? found.name : 'Unknown product'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </Table>
+                  ) : (
+                    <div className="text-muted mt-2">No products associated with this content.</div>
+                  )}
+                </div>
+              </>
             )}
           </Modal.Body>
           <Modal.Footer>
@@ -1092,8 +1125,8 @@ function ContentLibrary() {
                     />
                     {productInputError && <div className="text-danger mt-2">{productInputError}</div>}
                   </div>
-                                    <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
-                   <div>
+                  <div className="text-center my-2 text-muted" style={{ fontSize: '0.9rem' }}></div>
+                  <div>
                     {selectedProductOptions.length > 0 && (
                       <>
                         <div className="text-muted small mb-1">{selectedProductOptions.length} {selectedProductOptions.length === 1 ? 'product' : 'products'}</div>
@@ -1113,7 +1146,7 @@ function ContentLibrary() {
                   </div>
                 </div>
               </Form.Group>
-              
+
               {deviceResolutions.landscape.length === 0 && deviceResolutions.portrait.length === 0 ? (
                 <Alert variant="warning">
                   No device resolutions found.{' '}
@@ -1140,9 +1173,8 @@ function ContentLibrary() {
           <Modal.Body>
             <div className="text-center py-3">
               <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '3rem' }}></i>
-              <p className="mt-3 mb-0">Are you sure you want to <b>disable</b> this content?</p>
-              <p className="fw-bold">This action cannot be undone.</p>
-              <p className="text-danger">You cannot enable this content again. It will remain in the database but cannot be used.</p>
+              <p className="mt-3 mb-0">Do you confirm to de-activate the content?</p>
+
             </div>
           </Modal.Body>
           <Modal.Footer>

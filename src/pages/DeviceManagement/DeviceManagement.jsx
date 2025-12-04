@@ -11,34 +11,34 @@ import { storeList } from '../../data/storeList';
 import { getAllDevices, addDevice, updateDevice, deleteDeviceById } from '../../services/deviceIndexeddb';
 
 function DeviceManagement() {
-      // Load assignments from IndexedDB on mount
-      React.useEffect(() => {
-        async function loadAssignmentsFromDB() {
-          const all = await getAllAssignments();
-          setAssignments(all);
-        }
-        loadAssignmentsFromDB();
-      }, []);
-    // ...existing state...
-    // Fix: Add missing state for configMacAddress and showInlineAssignForm
-    const [configMacAddress, setConfigMacAddress] = React.useState('');
-    // (No UI code here, but ensure that when rendering, use Bootstrap classes for all forms, tables, and modals)
-    // For example, wrap main content in <div className="container-fluid py-4 bg-light min-vh-100">
-    // Use .card, .shadow, .rounded, .table, .btn, .form-control, .form-label, .row, .col, etc. for all UI elements
-    // Add .fw-bold, .text-primary, .mb-3, .mb-4, .p-3, .bg-white, .border, .rounded-pill, etc. for visual polish
-    // For modals, use .modal-content, .modal-header, .modal-body, .modal-footer, and add .bg-white .rounded
-    // For tabs, use .nav-tabs, .nav-link, .active, etc.
-    // For alerts, use .alert, .alert-info, .alert-warning, .alert-success, etc.
-    // For buttons, use .btn, .btn-primary, .btn-outline-primary, .btn-danger, .btn-outline-danger, .shadow-sm, .px-3, .rounded-pill
-    // For tables, use .table, .table-bordered, .table-hover, .table-light, .align-middle, .shadow-sm, .rounded
-    // For section headers, use .fw-bold, .text-primary, .mb-3, .mb-4
-    // For spacing, use .mb-2, .mb-3, .mb-4, .py-2, .py-3, .px-2, .px-3
-    // For cards, use .card, .card-body, .shadow, .rounded, .mb-3, .bg-white
-    // For dropdowns and selects, use .form-select, .form-control
-    // For search bars, use .input-group, .form-control, .input-group-text
-    // For preview modals, use .modal-lg, .modal-dialog-centered, .bg-dark, .rounded
-    // For confirmation dialogs, use .modal, .modal-content, .modal-header, .modal-body, .modal-footer, .text-center, .text-danger, .fw-bold
-    // For all icons, use Bootstrap Icons with .me-2, .me-1, etc.
+  // Load assignments from IndexedDB on mount
+  React.useEffect(() => {
+    async function loadAssignmentsFromDB() {
+      const all = await getAllAssignments();
+      setAssignments(all);
+    }
+    loadAssignmentsFromDB();
+  }, []);
+  // ...existing state...
+  // Fix: Add missing state for configMacAddress and showInlineAssignForm
+  const [configMacAddress, setConfigMacAddress] = React.useState('');
+  // (No UI code here, but ensure that when rendering, use Bootstrap classes for all forms, tables, and modals)
+  // For example, wrap main content in <div className="container-fluid py-4 bg-light min-vh-100">
+  // Use .card, .shadow, .rounded, .table, .btn, .form-control, .form-label, .row, .col, etc. for all UI elements
+  // Add .fw-bold, .text-primary, .mb-3, .mb-4, .p-3, .bg-white, .border, .rounded-pill, etc. for visual polish
+  // For modals, use .modal-content, .modal-header, .modal-body, .modal-footer, and add .bg-white .rounded
+  // For tabs, use .nav-tabs, .nav-link, .active, etc.
+  // For alerts, use .alert, .alert-info, .alert-warning, .alert-success, etc.
+  // For buttons, use .btn, .btn-primary, .btn-outline-primary, .btn-danger, .btn-outline-danger, .shadow-sm, .px-3, .rounded-pill
+  // For tables, use .table, .table-bordered, .table-hover, .table-light, .align-middle, .shadow-sm, .rounded
+  // For section headers, use .fw-bold, .text-primary, .mb-3, .mb-4
+  // For spacing, use .mb-2, .mb-3, .mb-4, .py-2, .py-3, .px-2, .px-3
+  // For cards, use .card, .card-body, .shadow, .rounded, .mb-3, .bg-white
+  // For dropdowns and selects, use .form-select, .form-control
+  // For search bars, use .input-group, .form-control, .input-group-text
+  // For preview modals, use .modal-lg, .modal-dialog-centered, .bg-dark, .rounded
+  // For confirmation dialogs, use .modal, .modal-content, .modal-header, .modal-body, .modal-footer, .text-center, .text-danger, .fw-bold
+  // For all icons, use Bootstrap Icons with .me-2, .me-1, etc.
 
   // ...existing code...
 
@@ -58,9 +58,9 @@ function DeviceManagement() {
       setActiveSubTab(sub);
     }
   }, [location.search]);
-  
+
   // ...removed Edit Store Modal state...
-  
+
   // Autocomplete for manual store IDs
 
 
@@ -83,7 +83,7 @@ function DeviceManagement() {
     const d = new Date(dt);
     // Format dd-MMM-yy, hh:mm
     const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const day = pad(d.getDate());
     const mon = months[d.getMonth()];
     const year = String(d.getFullYear()).slice(-2);
@@ -101,19 +101,19 @@ function DeviceManagement() {
     if (suffix.length < 5) suffix = suffix.padStart(5, '0');
     // Add trailing letter based on checksum
     let sum = 0;
-    for (let i=0;i<base.length;i++) sum += base.charCodeAt(i);
+    for (let i = 0; i < base.length; i++) sum += base.charCodeAt(i);
     const letter = String.fromCharCode(65 + (sum % 26));
     return `OTG${suffix}${letter}`;
   }
 
   // Load devices from IndexedDB on mount
-    useEffect(() => {
-      async function loadDevicesFromDB() {
-        const all = await getAllDevices();
-        setDevices(all);
-      }
-      loadDevicesFromDB();
-    }, []);
+  useEffect(() => {
+    async function loadDevicesFromDB() {
+      const all = await getAllDevices();
+      setDevices(all);
+    }
+    loadDevicesFromDB();
+  }, []);
 
   // Re-calculate the store-to-device mapping whenever assignments or device models change
   useEffect(() => {
@@ -133,8 +133,8 @@ function DeviceManagement() {
       const deviceModel = devices.find(d => d.id === assignment.deviceId);
       if (deviceModel) {
         acc[storeId].deviceCount++;
-        acc[storeId].devices.push({ 
-          ...deviceModel, 
+        acc[storeId].devices.push({
+          ...deviceModel,
           assignmentId: assignment.assignmentId,
           macAddress: assignment.macAddress,
           orientation: assignment.orientation || deviceModel.orientation,
@@ -189,34 +189,34 @@ function DeviceManagement() {
     return saved ? JSON.parse(saved) : [];
   });
 
-    function orientationLabel(orientation) {
-      if (!orientation) return 'Both';
-      const o = String(orientation).toLowerCase();
-      if (o === 'horizontal') return 'Landscape';
-      if (o === 'vertical') return 'Portrait';
-      return 'Both';
-    }
+  function orientationLabel(orientation) {
+    if (!orientation) return 'Both';
+    const o = String(orientation).toLowerCase();
+    if (o === 'horizontal') return 'Landscape';
+    if (o === 'vertical') return 'Portrait';
+    return 'Both';
+  }
 
-    const handleDownloadDeviceTypes = () => {
-      // Build data copy same as table displayed
-        const data = (devices || []).map((d, idx) => {
-          const isDisabled = (typeof d.active === 'boolean') ? !d.active : disabledDevices.includes(d.id);
-          const statusLabel = isDisabled ? 'Inactive' : 'Active';
-          return ({
+  const handleDownloadDeviceTypes = () => {
+    // Build data copy same as table displayed
+    const data = (devices || []).map((d, idx) => {
+      const isDisabled = (typeof d.active === 'boolean') ? !d.active : disabledDevices.includes(d.id);
+      const statusLabel = isDisabled ? 'Inactive' : 'Active';
+      return ({
         'Device Type ID': d.id,
         'Device Type': d.name || '-',
         'Possible Orientations': orientationLabel(d.orientation || 'both'),
         'Resolution (W × H)': `${(d.resolution && d.resolution.width) || 1920} × ${(d.resolution && d.resolution.height) || 1080}`,
         'Created By': d.createdBy || generateCreatorId(d, idx),
-          'Created On': d.createdAt ? formatDateShort(d.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000))),
-          'Status': statusLabel
-        });
-        });
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'DeviceTypes');
-      XLSX.writeFile(workbook, 'device-types.xlsx');
-    };
+        'Created On': d.createdAt ? formatDateShort(d.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000))),
+        'Status': statusLabel
+      });
+    });
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'DeviceTypes');
+    XLSX.writeFile(workbook, 'device-types.xlsx');
+  };
 
   // Disable device handler
   const handleToggleDisableDevice = async (deviceId, isCurrentlyDisabled) => {
@@ -377,7 +377,7 @@ function DeviceManagement() {
 
   const handleOrientationChange = (newOrientation) => {
     setConfigOrientation(newOrientation);
-    
+
     // Auto-swap resolution when changing orientation
     if (newOrientation === 'vertical') {
       // If current is landscape (width > height), swap
@@ -506,110 +506,110 @@ function DeviceManagement() {
   return (
     <div className="device-management">
 
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <div></div>
-            <div style={{ display: 'inline-flex', gap: 8 }}>
-              <Button variant="secondary" onClick={handleDownloadDeviceTypes} disabled={!devices || devices.length === 0}>
-                <i className="bi bi-download me-2"></i>
-                Download
-              </Button>
-              <Button variant="primary" onClick={() => { setShowAddModal(true); setIsClone(false); setNewDeviceName(''); setNewDeviceNameError(''); setNewDeviceOrientation('both'); setNewDeviceResolutionWidth('1920'); setNewDeviceResolutionHeight('1080'); }}>
-                Add Device Type
-              </Button>
-            </div>
-          </div>
-          <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <div></div>
+        <div style={{ display: 'inline-flex', gap: 8 }}>
+          <Button variant="secondary" onClick={handleDownloadDeviceTypes} disabled={!devices || devices.length === 0}>
+            <i className="bi bi-download me-2"></i>
+            Download
+          </Button>
+          <Button variant="primary" onClick={() => { setShowAddModal(true); setIsClone(false); setNewDeviceName(''); setNewDeviceNameError(''); setNewDeviceOrientation('both'); setNewDeviceResolutionWidth('1920'); setNewDeviceResolutionHeight('1080'); }}>
+            Add Device Type
+          </Button>
+        </div>
+      </div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
         <h4>
           <i className="bi bi-hdd-network me-2"></i>
           Device Type List
         </h4>
       </div>
-          <div className="table-responsive">
-            <table className="table table-bordered align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th>Device Type ID</th>
-                    <th>Device Type</th>
-                    <th>Possible Orientations</th>
-                    <th>Resolution (W × H)</th>
-                    <th>Created By</th>
-                    <th>Created On</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {devices.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="text-center text-muted">No records found</td>
-                    </tr>
-                  ) : (
-                    devices.map((device, idx) => {
-                    // Determine disabled status from DB active flag or fallback to localStorage
-                    const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
-                    // Determine if device is assigned to any store
-                    const isAssignedToStore = assignments.some(a => a.deviceId === device.id);
-                    return (
-                      <tr key={device.id}>
-                        <td>{device.id}</td>
-                        <td className="font-monospace small">{device.name}</td>
-                        <td>
-                          {/* Display orientation as text only (Both / Landscape / Portrait) */}
-                          <div>
-                            {(() => {
-                              const orientation = (device.orientation || 'both');
-                              if (orientation === 'horizontal') return 'Landscape';
-                              if (orientation === 'vertical') return 'Portrait';
-                              return 'Both';
-                            })()}
-                          </div>
-                        </td>
-                        <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
-                        <td className="font-monospace small">{device.createdBy || generateCreatorId(device, idx)}</td>
-                        <td>{device.createdAt ? formatDateShort(device.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000)))}</td>
-                        <td>
-                          {/* Disable/Enable Toggle Switch */}
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            {/* Edit/Configure removed from actions per UX request */}
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
-                            >
-                              <Button 
-                                variant="secondary" 
-                                size="sm"
-                                className="me-2"
-                                onClick={() => handleCloneDevice(device)}
-                              >
-                                <i className="bi bi-files"></i>
-                              </Button>
-                            </OverlayTrigger>
+      <div className="table-responsive">
+        <table className="table table-bordered align-middle">
+          <thead className="table-light">
+            <tr>
+              <th>Device Type ID</th>
+              <th>Device Type</th>
+              <th>Possible Orientations</th>
+              <th>Resolution (W × H)</th>
+              <th>Created By</th>
+              <th>Created On</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center text-muted">No records found</td>
+              </tr>
+            ) : (
+              devices.map((device, idx) => {
+                // Determine disabled status from DB active flag or fallback to localStorage
+                const isDisabled = (typeof device.active === 'boolean') ? !device.active : disabledDevices.includes(device.id);
+                // Determine if device is assigned to any store
+                const isAssignedToStore = assignments.some(a => a.deviceId === device.id);
+                return (
+                  <tr key={device.id}>
+                    <td>{device.id}</td>
+                    <td className="font-monospace small">{device.name}</td>
+                    <td>
+                      {/* Display orientation as text only (Both / Landscape / Portrait) */}
+                      <div>
+                        {(() => {
+                          const orientation = (device.orientation || 'both');
+                          if (orientation === 'horizontal') return 'Landscape';
+                          if (orientation === 'vertical') return 'Portrait';
+                          return 'Both';
+                        })()}
+                      </div>
+                    </td>
+                    <td>{device.resolution?.width || 1920} × {device.resolution?.height || 1080}</td>
+                    <td className="font-monospace small">{device.createdBy || generateCreatorId(device, idx)}</td>
+                    <td>{device.createdAt ? formatDateShort(device.createdAt) : formatDateShort(new Date(Date.now() - ((idx + 1) * 60 * 60 * 1000) - (idx * 60000)))}</td>
+                    <td>
+                      {/* Disable/Enable Toggle Switch */}
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {/* Edit/Configure removed from actions per UX request */}
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip id={`tooltip-clone-${device.id}`}>Clone</Tooltip>}
+                        >
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="me-2"
+                            onClick={() => handleCloneDevice(device)}
+                          >
+                            <i className="bi bi-files"></i>
+                          </Button>
+                        </OverlayTrigger>
 
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip id={`tooltip-disable-${device.id}`}>{isDisabled ? 'This device has been disabled and cannot be re-enabled.' : (isAssignedToStore && device.active ? 'Cannot disable while assigned to a store. Unassign first.' : (isDisabled ? 'Disabled' : !isDisabled ? 'Disable device' : 'Enable device'))}</Tooltip>}
-                            >
-                              <div>
-                                <Form.Check
-                                  type="switch"
-                                  id={`disable-switch-${device.id}`}
-                                  checked={!isDisabled}
-                                  onChange={() => handleToggleDisableDevice(device.id, isDisabled)}
-                                  disabled={isDisabled || (isAssignedToStore && device.active)}
-                                  label={!isDisabled ? 'Active' : 'Inactive'}
-                                  style={{ marginBottom: 0, marginRight: 8 }}
-                                />
-                              </div>
-                            </OverlayTrigger>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip id={`tooltip-disable-${device.id}`}>{isDisabled ? 'This device has been disabled and cannot be re-enabled.' : (isAssignedToStore && device.active ? 'Cannot disable while assigned to a store. Unassign first.' : (isDisabled ? 'Disabled' : !isDisabled ? 'Disable device' : 'Enable device'))}</Tooltip>}
+                        >
+                          <div>
+                            <Form.Check
+                              type="switch"
+                              id={`disable-switch-${device.id}`}
+                              checked={!isDisabled}
+                              onChange={() => handleToggleDisableDevice(device.id, isDisabled)}
+                              disabled={isDisabled || (isAssignedToStore && device.active)}
+                              label={!isDisabled ? 'Active' : 'Inactive'}
+                              style={{ marginBottom: 0, marginRight: 8 }}
+                            />
                           </div>
-                        </td>
-                      </tr>
-                    );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-        
+                        </OverlayTrigger>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
 
       {/* Add Device Modal */}
       <Modal show={showAddModal} onHide={() => { setShowAddModal(false); setIsClone(false); }} size="xl">
@@ -647,7 +647,7 @@ function DeviceManagement() {
                   label={
                     <>
                       <i className="bi bi-arrows-angle-expand me-2"></i>
-                      Both 
+                      Both
                     </>
                   }
                   value="both"
@@ -690,14 +690,14 @@ function DeviceManagement() {
                 <Col md={5}>
                   <InputGroup>
                     <InputGroup.Text>Width</InputGroup.Text>
-                        <Form.Control
-                          type="number"
-                          value={newDeviceResolutionWidth}
-                          onChange={(e) => { setNewDeviceResolutionWidth(e.target.value); if (newDeviceResolutionError) setNewDeviceResolutionError(''); }}
-                          onBlur={() => setNewDeviceResolutionError(validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight))}
-                          min="640"
-                          max="7680"
-                        />
+                    <Form.Control
+                      type="number"
+                      value={newDeviceResolutionWidth}
+                      onChange={(e) => { setNewDeviceResolutionWidth(e.target.value); if (newDeviceResolutionError) setNewDeviceResolutionError(''); }}
+                      onBlur={() => setNewDeviceResolutionError(validateResolution(newDeviceOrientation, newDeviceResolutionWidth, newDeviceResolutionHeight))}
+                      min="640"
+                      max="7680"
+                    />
                     <InputGroup.Text>px</InputGroup.Text>
                   </InputGroup>
                 </Col>
@@ -721,7 +721,7 @@ function DeviceManagement() {
               </Row>
               {newDeviceOrientation === 'both' && (
                 <Form.Text className="text-muted d-block mt-2">
-                <strong>Note:</strong> If both orientations are possible, enter the resolution for landscape mode.
+                  <strong>Note:</strong> If both orientations are possible, enter the resolution for landscape mode.
                 </Form.Text>
               )}
               {newDeviceResolutionError && (
@@ -729,13 +729,13 @@ function DeviceManagement() {
               )}
               <Form.Text className="text-muted">
                 <i className="bi bi-info-circle me-1"></i>
-                Example: 1920×1080 
+                Example: 1920×1080
               </Form.Text>
-              
+
             </Form.Group>
           </Form>
         </Modal.Body>
-          <Modal.Footer>
+        <Modal.Footer>
           <Button variant="secondary" onClick={handleResetAddModal}>
             Reset
           </Button>
@@ -814,7 +814,7 @@ function DeviceManagement() {
                   label={
                     <>
                       <i className="bi bi-arrows-angle-expand me-2"></i>
-                      Both 
+                      Both
                     </>
                   }
                   value="both"
@@ -899,8 +899,8 @@ function DeviceManagement() {
             <Form.Group className="mb-3">
               <Form.Label>Common Resolutions</Form.Label>
               <div className="d-flex flex-wrap gap-2">
-                <Button 
-                  variant="outline-secondary" 
+                <Button
+                  variant="outline-secondary"
                   size="sm"
                   onClick={() => {
                     setConfigResolutionWidth('1920');
@@ -909,8 +909,8 @@ function DeviceManagement() {
                 >
                   1920×1080 (Full HD)
                 </Button>
-                <Button 
-                  variant="outline-secondary" 
+                <Button
+                  variant="outline-secondary"
                   size="sm"
                   onClick={() => {
                     setConfigResolutionWidth('1440');
@@ -919,8 +919,8 @@ function DeviceManagement() {
                 >
                   1440×900
                 </Button>
-                <Button 
-                  variant="outline-secondary" 
+                <Button
+                  variant="outline-secondary"
                   size="sm"
                   onClick={() => {
                     setConfigResolutionWidth('3840');
@@ -929,8 +929,8 @@ function DeviceManagement() {
                 >
                   3840×2160 (4K)
                 </Button>
-                <Button 
-                  variant="outline-secondary" 
+                <Button
+                  variant="outline-secondary"
                   size="sm"
                   onClick={() => {
                     setConfigResolutionWidth('1080');
@@ -1049,51 +1049,44 @@ function DeviceManagement() {
           }
         `}
       </style>
-    {/* Disable Warning Modal */}
-    <Modal show={showDisableWarning} onHide={() => setShowDisableWarning(false)} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Cannot Disable Device</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="text-center py-3">
-          <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
-          <p className="mt-3 mb-0">This device is assigned to the following store(s):</p>
-          <ul className="list-unstyled fw-bold">
-            {disableWarningStores.map((store, idx) => (
-              <li key={idx}>{store}</li>
-            ))}
-          </ul>
-          <p className="text-danger">You cannot disable a device that is assigned to a store.</p>
-        </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={() => setShowDisableWarning(false)}>
-          Close
-        </Button>
-      </Modal.Footer>
-    </Modal>
+      {/* Disable Warning Modal */}
+      <Modal show={showDisableWarning} onHide={() => setShowDisableWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Cannot Disable Device</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="text-center py-3">
+            <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
+            <p className="mt-3 mb-0">Devices of this type are associated at stores, please de-activate such associations to de-activate the device type</p>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDisableWarning(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
-    {/* Disable Confirm Modal */}
-    <Modal show={showDisableConfirm} onHide={() => setShowDisableConfirm(false)} centered>
-      <Modal.Header closeButton>
-        <Modal.Title>Disable Device</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="text-center py-3">
-          <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
-          <p className="mt-3 mb-0">Do you confirm to de-activate the device?</p>
-          <p className="">This action cannot be undone.</p>
-        </div>
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={() => setShowDisableConfirm(false)}>
-          Go Back
-        </Button>
-        <Button variant="danger" onClick={confirmDisableDevice}>
-          Proceed
-        </Button>
-      </Modal.Footer>
-    </Modal>
+      {/* Disable Confirm Modal */}
+      <Modal show={showDisableConfirm} onHide={() => setShowDisableConfirm(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Disable Device</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="text-center py-3">
+            <i className="bi bi-exclamation-triangle text-warning" style={{ fontSize: '2.5rem' }}></i>
+            <p className="mt-3 mb-0">Do you confirm to de-activate the device?</p>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDisableConfirm(false)}>
+            Go Back
+          </Button>
+          <Button variant="danger" onClick={confirmDisableDevice}>
+            Proceed
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 }
