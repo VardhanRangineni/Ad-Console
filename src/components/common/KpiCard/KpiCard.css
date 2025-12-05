@@ -1,66 +1,265 @@
-.kpi-card { cursor: pointer; color: #fff; border: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
-.kpi-card:hover { transform: translateY(-4px); }
-.kpi-card.bg-primary { background: #007bff; }
-.kpi-card.bg-info { background: #17a2b8; }
-.kpi-card.bg-warning { background: #ffc107; color: #212529; }
+/* ========================================
+   CARD CONTAINER
+======================================== */
 
-/* Ensure text and labels are white for strong background kpis */
+.kpi-card {
+    height: 180px;
+    cursor: pointer;
+    color: #fff;
+    border: none;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.kpi-card:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* ========================================
+   CARD BODY
+======================================== */
+
+.kpi-body {
+    height: 100%;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 1rem 14px;
+    position: relative;
+}
+
+/* ========================================
+   BACKGROUND VARIANTS
+======================================== */
+
+.kpi-card.bg-primary {
+    background: #007bff;
+}
+
+.kpi-card.bg-info {
+    background: #17a2b8;
+}
+
+.kpi-card.bg-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+/* Text color overrides for colored backgrounds */
 .kpi-card.bg-primary .kpi-title,
 .kpi-card.bg-primary .kpi-left-label,
 .kpi-card.bg-primary .kpi-right-label,
 .kpi-card.bg-primary .kpi-subitems,
 .kpi-card.bg-primary .kpi-main-value,
-.kpi-card.bg-primary .kpi-right-value { color: #ffffff !important; opacity: 0.95; }
-
+.kpi-card.bg-primary .kpi-right-value,
 .kpi-card.bg-info .kpi-title,
 .kpi-card.bg-info .kpi-left-label,
 .kpi-card.bg-info .kpi-right-label,
 .kpi-card.bg-info .kpi-subitems,
 .kpi-card.bg-info .kpi-main-value,
-.kpi-card.bg-info .kpi-right-value { color: #ffffff !important; opacity: 0.95; }
+.kpi-card.bg-info .kpi-right-value {
+    color: #ffffff;
+    opacity: 0.95;
+}
+
 .kpi-card.bg-primary .kpi-number-label,
 .kpi-card.bg-info .kpi-number-label,
-.kpi-card.bg-warning .kpi-number-label { color: inherit; opacity: 0.9; }
-.kpi-body { min-height: 160px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; position: relative; padding-bottom: 14px; padding-top: 10px; }
-.kpi-left-main .kpi-main-value,
-.kpi-right-value { font-size: 1.95rem; font-weight: 600; }
-.kpi-title { color: inherit; opacity: 0.8; font-size: 0.9rem; margin-bottom: 4px; font-weight: 600; }
-.kpi-header-row { align-items: center; }
-.kpi-title-right { font-size: 0.9rem; opacity: 0.8; font-weight: 600; white-space: nowrap; display: inline-block; overflow: hidden; text-overflow: ellipsis; text-align: right; }
-.kpi-header-right { gap: 6px; display: flex !important; align-items: center !important; justify-content: flex-end !important; white-space: nowrap; }
-.kpi-header-icon { font-size: 0.95rem; opacity: 0.85; cursor: pointer; display: inline-block; vertical-align: middle; transform: translateY(0.05rem); }
-.kpi-label-row { margin-top: 0; }
-.kpi-subitems { opacity: 0.95; }
-.kpi-right-value { font-size: 1.95rem; font-weight: 600; }
-.kpi-right-label { opacity: 0.9; margin-bottom: 6px; }
-.kpi-left-label { opacity: 0.9; margin-bottom: 6px; }
-.kpi-right { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 64px; }
-.kpi-left { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 64px; }
-.kpi-left-label { opacity: 0.9; margin-bottom: 6px; }
-.kpi-card:focus { outline: none; box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); }
+.kpi-card.bg-warning .kpi-number-label {
+    color: inherit;
+    opacity: 0.9;
+}
 
-/* Ensure consistent height across different card variants */
-.kpi-card .kpi-body { min-height: 160px !important; }
+/* ========================================
+   HEADER SECTION
+======================================== */
 
-/* Make sure the main number and right number align and don't exceed available space */
-.kpi-left-main, .kpi-right-main { display: flex; align-items: center; gap: 0.5rem; min-width: 64px; flex-wrap: nowrap; cursor: pointer; }
-.kpi-card { height: 180px !important; }
-.kpi-card .kpi-body { height: calc(100% - 0px) !important; }
-.kpi-card .kpi-body { display: flex !important; flex-direction: column !important; justify-content: space-between !important; }
-.kpi-card { overflow: hidden; }
-.kpi-num-wrapper { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.kpi-number-label { font-size: 0.85rem; opacity: 0.9; margin-top: 4px; }
-.kpi-number-label-right { align-self: center; }
-.kpi-main-value, .kpi-right-value { line-height: 1; }
-.kpi-main-row { align-items: center; }
-.kpi-inline-subitems { display: none; }
-.kpi-inline-subitems .me-2 { margin-right: 0.5rem; }
-.kpi-inline-subitems .me-3 { margin-right: 0.75rem; }
-.kpi-inline-subitems .badge { font-size: 0.75rem; padding: 0.25rem 0.4rem; }
-.kpi-inline-subitems div { display: inline-flex; align-items: center; }
-.kpi-left, .kpi-right { position: relative; }
-.kpi-bottom { display: flex; justify-content: space-between; gap: 2rem; margin-top: auto; }
-.kpi-bottom-left, .kpi-bottom-right { display: flex; align-items: center; gap: 1.2rem; }
-.kpi-bottom-left .me-3, .kpi-bottom-right .me-3 { margin-right: 1rem; }
-.kpi-bottom.kpi-bottom-centered { justify-content: center; }
-.kpi-bottom-left .badge, .kpi-bottom-right .badge { font-size: 0.75rem; padding: 0.25rem 0.4rem; }
+.kpi-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kpi-title {
+    color: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.8;
+    margin-bottom: 4px;
+}
+
+.kpi-header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.kpi-title-right {
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.8;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kpi-header-icon {
+    font-size: 0.95rem;
+    opacity: 0.85;
+    cursor: pointer;
+    vertical-align: middle;
+    transform: translateY(0.05rem);
+}
+
+/* ========================================
+   MAIN VALUES ROW
+======================================== */
+
+.kpi-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.kpi-left,
+.kpi-right {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 64px;
+    position: relative;
+}
+
+.kpi-left-main,
+.kpi-right-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 64px;
+    cursor: pointer;
+    flex-wrap: nowrap;
+}
+
+/* ========================================
+   KPI VALUES & LABELS
+======================================== */
+
+.kpi-num-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.kpi-main-value,
+.kpi-right-value {
+    font-size: 1.95rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 0;
+}
+
+.kpi-number-label {
+    font-size: 0.85rem;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.kpi-number-label-right {
+    align-self: center;
+}
+
+.kpi-left-label,
+.kpi-right-label {
+    opacity: 0.9;
+    margin-bottom: 6px;
+}
+
+/* ========================================
+   SUB-ITEMS & BADGES
+======================================== */
+
+.kpi-subitems {
+    opacity: 0.95;
+}
+
+.kpi-label-row {
+    margin-top: 0;
+}
+
+/* ========================================
+   BOTTOM ROW
+======================================== */
+
+.kpi-bottom {
+    display: flex;
+    justify-content: space-between;
+    gap: 2rem;
+    margin-top: auto;
+}
+
+.kpi-bottom.kpi-bottom-centered {
+    justify-content: center;
+}
+
+.kpi-bottom-left,
+.kpi-bottom-right {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+}
+
+.kpi-bottom-left .badge,
+.kpi-bottom-right .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.4rem;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+======================================== */
+
+@media (max-width: 768px) {
+    .kpi-card {
+        height: auto;
+        min-height: 180px;
+    }
+
+    .kpi-main-value,
+    .kpi-right-value {
+        font-size: 1.6rem;
+    }
+
+    .kpi-bottom {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .kpi-bottom-left,
+    .kpi-bottom-right {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .kpi-title-right {
+        max-width: 120px;
+    }
+
+    .kpi-header-row {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+}
